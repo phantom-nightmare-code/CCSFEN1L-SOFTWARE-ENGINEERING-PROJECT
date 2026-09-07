@@ -1,37 +1,9 @@
 # CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 Project Repository for CCSFEN1L (Software Engineering)
-
+**NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)**
 Folder Structure:
 
-**fitforge/
-├── fitforge-backend/
-│   ├── .env
-│   ├── package.json
-│   ├── server.js
-│   ├── db.js
-│   ├── routes/
-│   │   ├── exercises.js
-│   │   ├── routines.js
-│   │   ├── workouts.js
-│   │   └── analytics.js
-│   └── middleware/
-│       └── auth.js 
-├── fitforge-frontend/
-│   ├── package.json
-│   ├── public/
-│   │   └── index.html
-│   └── src/
-│       ├── index.js
-│       ├── App.js
-│       ├── api.js
-│       ├── components/
-│       │   ├── Routines.js
-│       │   ├── Workouts.js
-│       │   ├── LogWorkout.js
-│       │   └── Dashboard.js
-│       └── styles/
-│           └── App.css 
-└── fitforge.sql**
+<img width="380" height="730" alt="image" src="https://github.com/user-attachments/assets/49487881-1011-48ae-bbca-db6a31bc644a" />
 
 
 Prerequisites:
@@ -230,7 +202,7 @@ Planned / Future Features (Next Steps):
 
 12.  Fitforge Logo
 
-TBA
+TBA FOR FUTURE ANNOUNCEMENTS
 
 
 
