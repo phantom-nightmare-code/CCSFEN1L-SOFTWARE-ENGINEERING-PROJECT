@@ -12,7 +12,7 @@ Prerequisites:
 
 1. Node.js installed
 
-2. XAMPP installed (MySQL service running)
+2. XAMPP installed (MAKE SURE THAT THE MySQL service + Apache are running)
 
 3. VS Code
 
