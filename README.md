@@ -150,7 +150,6 @@ CREATE TABLE IF NOT EXISTS workout_sets (
 );
 
 <br>
-<br>
 -- ==========================================
 -- SEED DATA (REQUIRED for the app to work!)
 -- ==========================================
