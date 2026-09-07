@@ -149,6 +149,8 @@ CREATE TABLE IF NOT EXISTS workout_sets (
     FOREIGN KEY (exercise_id) REFERENCES exercises(id)
 );
 
+<br>
+<br>
 -- ==========================================
 -- SEED DATA (REQUIRED for the app to work!)
 -- ==========================================
