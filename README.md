@@ -1,6 +1,8 @@
 # CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 Project Repository for CCSFEN1L (Software Engineering)
 **NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)**
+<br>
+<br>
 Folder Structure:
 
 <img width="380" height="730" alt="image" src="https://github.com/user-attachments/assets/49487881-1011-48ae-bbca-db6a31bc644a" />
