@@ -205,6 +205,7 @@ Planned / Future Features (Next Steps):
 
 12.  Fitforge Logo
 
+13.  Graphs (admin page implementation) Shows how many users logged in and shows how many workouts they did per daily/weekly and monthly/yearly)
 
 TBA FOR FUTURE ANNOUNCEMENTS
 
