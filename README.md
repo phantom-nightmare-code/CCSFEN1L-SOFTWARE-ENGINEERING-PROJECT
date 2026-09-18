@@ -193,7 +193,7 @@ Planned / Future Features (Next Steps):
 
 6. Admin page (All data of the whole website stored there + they can edit the features)
 
-7. Password Hashing
+7. Password Hashing (ah483884****)
 
 8.  Homepage (about FitForge)
 
@@ -201,11 +201,17 @@ Planned / Future Features (Next Steps):
 
 10.  Cash payment integration (gcash, paymaya etc)
 
-11.  gym rental (gym equipment (barbels etc)
+11.  gym rental (gym equipment barbels etc)
 
 12.  Fitforge Logo
 
 13.  Graphs (admin page implementation) Shows how many users logged in and shows how many workouts they did per daily/weekly and monthly/yearly)
+
+14.  Light and dark mode for the website
+
+15.  Recommended Gym Workout (suggestion panel for the home page)
+
+16.  All types of workout information and the recommended Gym rental equipment (2nd page) 
 
 TBA FOR FUTURE ANNOUNCEMENTS
 
