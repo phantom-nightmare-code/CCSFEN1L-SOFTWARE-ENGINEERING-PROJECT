@@ -197,13 +197,14 @@ Planned / Future Features (Next Steps):
 
 8.  Homepage (about FitForge)
 
-9.  Gym membership
+9.  Gym membership (walk ins, monthly membership and yearly membership)
 
 10.  Cash payment integration (gcash, paymaya etc)
 
 11.  gym rental (gym equipment (barbels etc)
 
 12.  Fitforge Logo
+
 
 TBA FOR FUTURE ANNOUNCEMENTS
 
