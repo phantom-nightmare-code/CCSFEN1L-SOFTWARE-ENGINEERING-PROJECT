@@ -103,6 +103,10 @@ FitForge/
             └── CoachClient.jsx         Client detail + send feedback
 ```
 
+FitForge Logo:
+<img width="757" height="685" alt="logo" src="https://github.com/user-attachments/assets/80525ab6-58b5-4248-a652-662bc1863d85" />
+<br>
+<br>
 
 Prerequisites
 Node.js installed (v18 or higher recommended)
