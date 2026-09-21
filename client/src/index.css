@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* Enable class-based dark mode (Tailwind v4 syntax) */
+/* Tailwind CSS v4 directive; unsupported by generic CSS linters. */
+/* csslint ignore:start */
+/* stylelint-disable-next-line at-rule-no-unknown */
+@custom-variant dark (&:where(.dark, .dark *));
+/* csslint ignore:end */
+
+html, body, #root { height: 100%; }
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
