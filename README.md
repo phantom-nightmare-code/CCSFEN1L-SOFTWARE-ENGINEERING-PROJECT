@@ -106,7 +106,8 @@ FitForge/
 <br>
 <br>
 FitForge Logo:
-
+<br>
+<br>
 <img width="757" height="685" alt="logo" src="https://github.com/user-attachments/assets/80525ab6-58b5-4248-a652-662bc1863d85" />
 
 
