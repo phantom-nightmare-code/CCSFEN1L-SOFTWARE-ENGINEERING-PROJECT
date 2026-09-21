@@ -1,39 +1,52 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-require('dotenv').config();
+const cookieParser = require('cookie-parser');
+
+const pool = require('./db/mysql');
+const connectMongo = require('./db/mongo');
 
 const app = express();
 
-// --- Middleware ---
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+app.use(cookieParser());
 
-// --- Import Routes ---
-const routineRoutes = require('./routes/routines');
-const workoutRoutes = require('./routes/workouts');
-const analyticsRoutes = require('./routes/analytics');
-const exerciseRoutes = require('./routes/exercises');
+/* ---------- DB connections ---------- */
+connectMongo();
+pool.getConnection()
+  .then(c => {
+    console.log('✅ MySQL connected');
+    c.release();
+  })
+  .catch(err => {
+    console.error('❌ MySQL connection failed:', err.message);
+    process.exit(1);
+  });
 
-// --- Mount Routes ---
-app.use('/api/routines', routineRoutes);
-app.use('/api/workouts', workoutRoutes);
-app.use('/api/analytics', analyticsRoutes);
-app.use('/api/exercises', exerciseRoutes);
+/* ---------- Routes ---------- */
+app.use('/api/auth',            require('./routes/auth'));
+app.use('/api/admin',           require('./routes/admin'));
+app.use('/api/coaches',         require('./routes/coaches'));
+app.use('/api/my-coach',        require('./routes/myCoach'));
+app.use('/api/memberships',     require('./routes/memberships'));
+app.use('/api/payments',        require('./routes/payments'));
+app.use('/api/rentals',         require('./routes/rentals'));
+app.use('/api/recommendations', require('./routes/recommendations'));
 
-// --- 404 Handler (Catches unmatched routes) ---
-// Placed at the bottom, after all valid routes, so unknown URLs get a JSON 404
-app.use((req, res, next) => {
-    res.status(404).json({ error: 'Route not found' });
-});
+app.use('/api/routines',        require('./routes/routines'));
+app.use('/api/workouts',        require('./routes/workouts'));
+app.use('/api/analytics',       require('./routes/analytics'));
+app.use('/api/exercises',       require('./routes/exercises'));
 
-// --- Centralized Error Handler ---
-// Catches any error passed to next() in your routes and sends a clean JSON response
-app.use((err, req, res, next) => {
-    console.error(err.stack); // Logs the full error to your backend terminal
-    res.status(err.status || 500).json({ 
-        error: err.message || 'Internal Server Error' 
-    });
+/* ---------- Health ---------- */
+app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+
+/* ---------- Error handler ---------- */
+app.use((err, _req, res, _next) => {
+  console.error('[ERROR]', err);
+  res.status(err.status || 500).json({ error: err.message || 'Server error' });
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 FitForge API on :${PORT}`));

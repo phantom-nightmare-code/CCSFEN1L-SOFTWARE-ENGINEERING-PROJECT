@@ -1,122 +1,77 @@
 const express = require('express');
+const pool = require('../db/mysql');
+const { authenticate } = require('../middleware/auth');
+
 const router = express.Router();
-const pool = require('../db');
+router.use(authenticate);
 
-// GET all routines for a user (hardcoded userId=1 for demo)
-router.get('/', async (req, res) => {
-    const userId = 1; // TODO: from JWT
-    try {
-        const [routines] = await pool.query(
-            'SELECT * FROM routines WHERE user_id = ?',
-            [userId]
-        );
-        // For each routine, fetch its exercises
-        for (let r of routines) {
-            const [exercises] = await pool.query(`
-                SELECT re.*, e.name as exercise_name 
-                FROM routine_exercises re
-                JOIN exercises e ON re.exercise_id = e.id
-                WHERE re.routine_id = ?
-                ORDER BY re.order_index
-            `, [r.id]);
-            r.exercises = exercises;
-        }
-        res.json(routines);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+/* GET /api/routines */
+router.get('/', async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      'SELECT * FROM routines WHERE user_id = ? ORDER BY created_at DESC',
+      [req.user.id]
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
 });
 
-// POST a new routine with its exercises (bulk insert)
-router.post('/', async (req, res) => {
-    const { name, description, exercises } = req.body; // exercises: [{exercise_id, default_sets, default_reps, default_weight}]
-    const userId = 1; // from auth
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
-        // Insert routine
-        const [routineResult] = await connection.query(
-            'INSERT INTO routines (user_id, name, description) VALUES (?, ?, ?)',
-            [userId, name, description]
-        );
-        const routineId = routineResult.insertId;
-        // Insert routine_exercises
-        if (exercises && exercises.length) {
-            const values = exercises.map((ex, idx) => [
-                routineId,
-                ex.exercise_id,
-                ex.default_sets || 3,
-                ex.default_reps || 10,
-                ex.default_weight || 0,
-                idx
-            ]);
-            await connection.query(
-                `INSERT INTO routine_exercises 
-                 (routine_id, exercise_id, default_sets, default_reps, default_weight, order_index)
-                 VALUES ?`,
-                [values]
-            );
-        }
-        await connection.commit();
-        res.status(201).json({ id: routineId, message: 'Routine created' });
-    } catch (err) {
-        await connection.rollback();
-        res.status(500).json({ error: err.message });
-    } finally {
-        connection.release();
-    }
+/* GET /api/routines/:id */
+router.get('/:id', async (req, res, next) => {
+  try {
+    const [routines] = await pool.query(
+      'SELECT * FROM routines WHERE id = ? AND user_id = ?',
+      [req.params.id, req.user.id]
+    );
+    if (!routines.length) return res.status(404).json({ error: 'Not found' });
+
+    const [exercises] = await pool.query(
+      `SELECT re.*, e.name, e.muscle_group
+       FROM routine_exercises re
+       JOIN exercises e ON e.id = re.exercise_id
+       WHERE re.routine_id = ?`,
+      [req.params.id]
+    );
+
+    res.json({ ...routines[0], exercises });
+  } catch (err) { next(err); }
 });
 
-// PUT update routine and its exercises (delete old and re-insert)
-router.put('/:id', async (req, res) => {
-    const { id } = req.params;
-    const { name, description, exercises } = req.body;
-    const connection = await pool.getConnection();
-    try {
-        await connection.beginTransaction();
-        // Update routine
-        await connection.query(
-            'UPDATE routines SET name = ?, description = ? WHERE id = ?',
-            [name, description, id]
-        );
-        // Delete existing routine_exercises
-        await connection.query('DELETE FROM routine_exercises WHERE routine_id = ?', [id]);
-        // Re-insert new exercises
-        if (exercises && exercises.length) {
-            const values = exercises.map((ex, idx) => [
-                id,
-                ex.exercise_id,
-                ex.default_sets || 3,
-                ex.default_reps || 10,
-                ex.default_weight || 0,
-                idx
-            ]);
-            await connection.query(
-                `INSERT INTO routine_exercises 
-                 (routine_id, exercise_id, default_sets, default_reps, default_weight, order_index)
-                 VALUES ?`,
-                [values]
-            );
-        }
-        await connection.commit();
-        res.json({ message: 'Routine updated' });
-    } catch (err) {
-        await connection.rollback();
-        res.status(500).json({ error: err.message });
-    } finally {
-        connection.release();
+/* POST /api/routines — bulk with transaction */
+router.post('/', async (req, res, next) => {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const { name, description, exercises = [] } = req.body;
+
+    const [r] = await conn.query(
+      'INSERT INTO routines (user_id, name, description) VALUES (?, ?, ?)',
+      [req.user.id, name, description || null]
+    );
+
+    for (const ex of exercises) {
+      await conn.query(
+        `INSERT INTO routine_exercises (routine_id, exercise_id, sets, reps, order_index)
+         VALUES (?, ?, ?, ?, ?)`,
+        [r.insertId, ex.exercise_id, ex.sets || 3, ex.reps || 10, ex.order_index || 0]
+      );
     }
+
+    await conn.commit();
+    res.status(201).json({ id: r.insertId });
+  } catch (err) {
+    await conn.rollback();
+    next(err);
+  } finally { conn.release(); }
 });
 
-// DELETE routine (cascade delete due to FK)
-router.delete('/:id', async (req, res) => {
-    const { id } = req.params;
-    try {
-        await pool.query('DELETE FROM routines WHERE id = ?', [id]);
-        res.json({ message: 'Routine deleted' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
+/* DELETE /api/routines/:id */
+router.delete('/:id', async (req, res, next) => {
+  try {
+    await pool.query('DELETE FROM routines WHERE id=? AND user_id=?',
+      [req.params.id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
