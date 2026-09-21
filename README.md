@@ -5,215 +5,305 @@ Project Repository for CCSFEN1L (Software Engineering)
 <br>
 Folder Structure:
 
-<img width="380" height="730" alt="image" src="https://github.com/user-attachments/assets/49487881-1011-48ae-bbca-db6a31bc644a" />
+```
+FitForge/
+│
+├── ⚙️ CONFIG & ROOT FILES
+│   ├── .env                       # Environment variables (DB credentials, JWT secrets, SMTP)
+│   ├── .env.example               # Configuration template for developers
+│   ├── .gitignore                 # Excludes node_modules, .env, build outputs
+│   ├── package.json               # Server dependencies (Express, Mongoose, MySQL2, Nodemailer)
+│   ├── server.js                  # Express application entry point & server setup
+│   └── README.md                  # Project overview, setup, and execution instructions
+│
+├── 🗄️ DATABASE (`/db`)
+│   ├── mysql.js                   # MySQL connection pool setup (mysql2)
+│   ├── mongo.js                   # MongoDB connection client (Mongoose)
+│   └── migrations/                # Version-controlled relational database migrations
+│       ├── 001_extend_schema.sql          # Initial schema expansions
+│       ├── 002_fitforge_extension.sql     # Core domain tables (Users, Memberships, Rentals)
+│       ├── 003_core_feature_columns.sql   # Additions for tracking & analytics
+│       ├── 004_routine_columns.sql        # Exercise & workout routine tables
+│       └── 005_coach_feature.sql          # Coach-to-client relation tables
+│
+├── 🛡️ MIDDLEWARE (`/middleware`)
+│   └── auth.js                    # Auth guards (JWT authentication, requireAdmin, requireCoach)
+│
+├── 📄 MONGO SCHEMAS & MODELS (`/models/mongo`)
+│   ├── ActivityLog.js             # High-throughput event audit logging schema
+│   ├── PaymentLog.js              # Semi-structured payment payloads & metadata
+│   └── AdminMetric.js             # Pre-aggregated daily system metrics snapshot schema
+│
+├── ⚙️ BACKEND SERVICES & LOGIC (`/services`)
+│   ├── activityLogger.js          # Writes user interaction events directly to MongoDB
+│   ├── prDetection.js             # Epley 1RM formula processing & PR tracking engine
+│   ├── recommendation.js          # Volume analysis algorithm for muscle balance suggestions
+│   └── mailer.js                  # SMTP mail service (Gmail integration, receipt & QR emails)
+│
+├── 🚦 API ROUTES & ENDPOINTS (`/routes`)
+│   ├── auth.js                    # POST /register, POST /login, GET /me, PUT /profile
+│   ├── admin.js                   # Management dashboard logic (26 administrative REST routes)
+│   ├── coaches.js                 # Coach actions (managing clients, providing feedback)
+│   ├── myCoach.js                 # Client actions (viewing coach notes & assigned plans)
+│   ├── memberships.js             # Subscription tier management & enrollment
+│   ├── payments.js                # Payment creation, QR code generation, verification & receipts
+│   ├── rentals.js                 # Equipment checkout and return transactions
+│   ├── recommendations.js        # Dynamic muscle balance recommendation routes
+│   ├── routines.js                # User routine creation and management CRUD
+│   ├── workouts.js                # Workout logging, history & automated PR computation
+│   ├── analytics.js               # Performance data aggregation (Volume, PRs, Muscle distribution)
+│   └── exercises.js               # Global exercise catalog lookup endpoints
+│
+└── 🖥️ FRONTEND CLIENT (`/client`)
+    ├── index.html                 # Main HTML DOM root element
+    ├── package.json               # Frontend dependencies (React, Axios, Vite, Tailwind v4)
+    ├── vite.config.js             # Vite builder configuration with Tailwind v4 plugin
+    ├── public/
+    │   └── logo.png               # Application branding assets
+    └── src/                       # React source application code
+        ├── index.jsx              # React DOM entry point
+        ├── index.css              # Global styles, Tailwind directives & dark mode overrides
+        ├── api.js                 # Centralized Axios client instance with JWT auto-inject interceptors
+        ├── App.jsx                # Application root component with React Router mapping
+        │
+        ├── 🔑 STATE MANAGEMENT (`src/context`)
+        │   ├── AuthContext.jsx    # User session state, JWT tokens & active user permissions
+        │   ├── ThemeContext.jsx   # Light/Dark mode state management
+        │   └── ToastContext.jsx   # App-wide floating alert notifications
+        │
+        ├── 🧱 UI COMPONENTS (`src/components`)
+        │   ├── Navbar.jsx         # Dynamic navigation bar tailored by active user role
+        │   ├── ProtectedRoute.jsx # Route authentication & authorization guards
+        │   ├── Card.jsx           # Reusable container wrapper component
+        │   ├── Receipt.jsx        # Printable payment transaction summary modal
+        │   ├── QRModal.jsx        # Payment QR code renderer & resend trigger
+        │   └── admin/             # Dedicated admin widgets
+        │       ├── RentalInventory.jsx  # Equipment tracking CRUD interface
+        │       ├── ExerciseLibrary.jsx  # Global exercise catalog manager
+        │       ├── RevenueChart.jsx     # Visual financial breakdown (Method/Purpose/Date)
+        │       ├── UserDetailModal.jsx  # Full user audit & account management modal
+        │       └── CoachManagement.jsx  # Client-to-coach assignment console
+        │
+        └── 📱 PAGE VIEWS (`src/pages`)
+            ├── Home.jsx           # Public landing page with service overview
+            ├── Login.jsx          # Authentication login form
+            ├── Register.jsx       # Account registration screen
+            ├── Profile.jsx        # User account dashboard (Membership history & receipts)
+            ├── Admin.jsx          # Central management console (10 tabbed sub-interfaces)
+            ├── Membership.jsx     # Subscription plan browser & payment flow
+            ├── Rentals.jsx        # Gear rental catalog & checkout system
+            ├── Recommendations.jsx Dynamic exercise recommendation feedback
+            ├── Workouts.jsx       # Daily workout logger & history viewer
+            ├── Routines.jsx       # Custom workout plan builder
+            ├── Analytics.jsx      # Personal progress graphs (Volume, PRs, balance charts)
+            ├── Exercises.jsx      # Searchable exercise database viewer
+            ├── VerifyPayment.jsx  # Public QR code payment confirmation page
+            ├── MyCoach.jsx        # Client portal for feedback from assigned coach
+            ├── Coach.jsx          # Coach dashboard listing active assigned clients
+            └── CoachClient.jsx    # Client analysis view & message submission for coaches
+
+```
 
 
-Prerequisites:
+Prerequisites
+Node.js installed (v18 or higher recommended)
 
-1. Node.js installed
+XAMPP installed — MAKE SURE MySQL and Apache services are running
 
-2. XAMPP installed (MAKE SURE THAT THE MySQL service + Apache are running)
+MongoDB Atlas account (free tier) — for payments, activity logs, and analytics rollups
 
-3. VS Code
+Gmail account with 2-Step Verification enabled — for sending payment QR codes and receipts
 
-Step 1: Database Setup
+VS Code (or any code editor)
 
+
+Step 1: Database Setup (MySQL)
 Open XAMPP Control Panel and start MySQL.
 
-Open phpMyAdmin (http://localhost/phpmyadmin), go to the SQL tab, and run the exact Schema SQL script provided above.
+Open phpMyAdmin (http://localhost/phpmyadmin), click the SQL tab, and run the full schema script provided at the bottom of this document.
 
-Step 2: Backend Setup
+Verify: In phpMyAdmin, click fitforge in the left sidebar — you should see 12 tables:
 
-Open VS Code. In your root FitForge folder, create a file named .env and paste the following:
+users, exercises, routines, routine_exercises
 
-DB_HOST=localhost
-DB_USER=root
-DB_PASSWORD=
-DB_NAME=fitforge
+workouts, workout_sets, personal_records
+
+memberships, rental_items, rentals
+
+coach_clients, coach_feedback
+
+**Step 2: MongoDB Atlas Setup**
+Sign up at https://cloud.mongodb.com (free M0 cluster).
+
+Create a database user (Database Access → Add New User):
+
+Username: fitforge_user
+
+Password: something strong (alphanumeric only — avoid special characters)
+
+Role: Read and write to any database
+
+Whitelist your IP (Network Access → Add IP Address → Add Current IP).
+
+Tip: Use 0.0.0.0/0 for development if your home IP changes often.
+
+Get your connection string:
+
+Click Connect on your cluster → Drivers → Node.js
+
+Copy the string (looks like mongodb+srv://fitforge_user:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority)
+
+Replace <password> with your actual password
+
+Insert /fitforge before the ? — e.g., .../fitforge?retryWrites=true...
+
+
+Step 3: Gmail App Password Setup
+1. Go to https://myaccount.google.com/security
+
+2. Enable 2-Step Verification (required).
+
+3. Go to https://myaccount.google.com/apppasswords
+
+4. Create a new app password — name it "FitForge Mailer".
+
+5. Copy the 16-character password (remove spaces).
+
+
+Step 4: Backend Setup
+1. Open VS Code. In your root FitForge folder, create a file named .env and paste:
+
 PORT=5000
+NODE_ENV=development
 
-In the terminal, run: npm install (to install Express, MySQL2, CORS, dotenv, etc.)
+MYSQL_HOST=localhost
+MYSQL_PORT=3306
+MYSQL_USER=root
+MYSQL_PASSWORD=
+MYSQL_DATABASE=fitforge
 
-Start the backend: node server.js (Leave this terminal open. You should see "Server running on port 5000").
+MONGO_URI=mongodb+srv://fitforge_user:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/fitforge?retryWrites=true&w=majority
 
-Step 3: Frontend Setup
+JWT_SECRET=your_64_char_random_hex_string_here
+JWT_EXPIRES_IN=7d
 
+EMAIL_USER=your.email@gmail.com
+EMAIL_PASS=your_16_char_app_password
+EMAIL_CC_ADMIN=
+
+CLIENT_URL=http://localhost:5173
+
+In the terminal, run:
+npm install
+
+Start the backend:
+npm run dev
+
+Leave this terminal open. You should see:
+🚀 FitForge API on :5000
+✅ MySQL connected
+✅ MongoDB connected
+
+Step 5: Frontend Setup
 Open a new terminal tab in VS Code.
 
-Change directory to the frontend: cd fitforge-frontend
+Navigate to the client folder:
+cd client
 
-Run: npm install (to install React, React Router, Axios, Recharts, etc.)
+Install dependencies:
+npm install
 
-Run: npm start (Leave this terminal open. The app will open at http://localhost:3000).
+Start the frontend:
+npm run dev
+Leave this terminal open. The app opens at http://localhost:5173
 
-Step 4: Using the App
+Step 6: Create Your First Admin
+Option A — Register then promote (easiest):
 
-Log Workout: Click "Log Workout". Select an exercise (e.g., "Bench Press"), type a Weight (e.g., 100) and Reps (e.g., 5), click "+ Add Set" to add another set, and press "Save Workout".
+Go to http://localhost:5173/register and create an account.
 
-View History: Click "Workouts". You will see the card showing "Sep 7, 2026 - [Notes]" with all your sets.
+Open phpMyAdmin → fitforge → SQL tab and run:
+UPDATE users SET role='admin' WHERE email='admin@fitforge.local';
+Log out and log back in — the Admin tab appears in the navbar.
 
-Create Routine: Click "Routines", enter a name, and add exercises.
+Step 7: Using the App
+As a regular user:
 
-Dashboard: Click "Dashboard". If you have logged several workouts with increasing weights, you will see the charts update.
+Log Workout: Click "Log a workout" → enter name, date → add sets (select exercise, weight, reps) → Save. If a new record is set, a toast confirms "N new PR(s)!"
 
+View History: Click "Workouts" → expand any workout to see all sets.
 
-Needed Dependencies (follow in order)
-Part 1: Backend Dependencies (Root FitForge folder)
-Make sure your terminal is in the FitForge folder (where server.js and db.js are).
+Build Routines: Click "Routines" → "+ New routine" → name it, add exercises with target sets/reps → Save. Click "Start" on any routine to launch a workout.
 
-Run this command:
-**npm install express cors dotenv mysql2**
+Analytics: Click "Analytics" → volume chart, muscle balance pie, and PR table update automatically. Use range selector for 7/30/90/365 days.
 
-Part 2: Frontend Dependencies (fitforge-frontend folder)
-Navigate into the frontend folder by running **cd fitforge-frontend**
+Exercise Library: Click "Exercises" → filter by muscle group or equipment, search by name.
 
-Run this command:
-npm install react react-dom react-router-dom axios recharts react-scripts
-(Note for React 19: If you get a peer dependency error when installing react-scripts, add --legacy-peer-deps to the end of the command, like this: npm install ... react-scripts --legacy-peer-deps).
+Membership: Click "Membership" → pick a plan → choose payment method. Cash/Card activate instantly. GCash/Maya/Bank trigger a QR code emailed to you.
 
-3. The "Clean Install" Cheat Sheet
-If you ever move this project to a new computer, clone the repository, or accidentally delete your node_modules folder, here is the exact sequence of commands to get everything working perfectly:
+Rentals: Click "Rentals" → pick equipment → reserve for 2 hours → return when done.
 
-Sample:
-Terminal 1 (Backend):
-**cd C:\Users\James Adrian Castro\Documents\FitForge
-npm install express cors dotenv mysql2
-node server.js**
+My Coach: If assigned to a coach, click "My Coach" → see all feedback with unread badges.
 
-Terminal 2 (Frontend):
-**cd C:\Users\James Adrian Castro\Documents\FitForge\fitforge-frontend
-npm install react react-dom react-router-dom axios recharts react-scripts --legacy-peer-deps
-npm start**
+Profile: Click "Profile" → edit name/username/birthday, view membership expiry countdown, transactions with receipts, and active rentals.
 
-Schema needed:
-CREATE DATABASE IF NOT EXISTS fitforge;
-USE fitforge;
+As a coach:
 
--- 1. Users Table
-CREATE TABLE IF NOT EXISTS users (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    username VARCHAR(255) NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+Click Coach in the navbar → see all assigned clients as cards.
 
--- 2. Exercises Table
-CREATE TABLE IF NOT EXISTS exercises (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(255) NOT NULL
-);
+Click a client → view their workout history, PRs, and membership status.
 
--- 3. Routines Table
-CREATE TABLE IF NOT EXISTS routines (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+Send feedback with subject, content, optional star rating, and workout attachment.
 
--- 4. Routine Exercises Table
-CREATE TABLE IF NOT EXISTS routine_exercises (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    routine_id INT NOT NULL,
-    exercise_id INT NOT NULL,
-    default_sets INT DEFAULT 3,
-    default_reps INT DEFAULT 10,
-    default_weight DECIMAL(10,2) DEFAULT 0,
-    order_index INT DEFAULT 0,
-    FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE CASCADE,
-    FOREIGN KEY (exercise_id) REFERENCES exercises(id)
-);
+As an admin:
 
--- 5. Workouts Table
-CREATE TABLE IF NOT EXISTS workouts (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    user_id INT NOT NULL,
-    routine_id INT,
-    workout_date DATE NOT NULL,
-    notes TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (routine_id) REFERENCES routines(id) ON DELETE SET NULL
-);
+Click Admin → 10 tabs available:
 
--- 6. Workout Sets Table (Updated with set_number and is_pr)
-CREATE TABLE IF NOT EXISTS workout_sets (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    workout_id INT NOT NULL,
-    exercise_id INT NOT NULL,
-    set_number INT DEFAULT 1,
-    weight DECIMAL(10,2) NOT NULL,
-    reps INT NOT NULL,
-    is_pr BOOLEAN DEFAULT FALSE,
-    FOREIGN KEY (workout_id) REFERENCES workouts(id) ON DELETE CASCADE,
-    FOREIGN KEY (exercise_id) REFERENCES exercises(id)
-);
+PROFILE — your admin card + all users grid
 
-<br>
--- ==========================================
--- SEED DATA (REQUIRED for the app to work!)
--- ==========================================
+STATS — user counts, login chart, daily revenue, payment breakdown
 
--- Create a User with ID = 1 (Since your code hardcodes userId = 1)
-INSERT INTO users (id, username, password) VALUES (1, 'demo', 'demo');
+USERS — role management (promote to coach, reset to user)
 
--- Add some exercises so the dropdown isn't empty
-INSERT INTO exercises (name) VALUES ('Bench Press'), ('Squat'), ('Deadlift'), ('Overhead Press');
+ACTIVITY — MongoDB activity feed
 
--- Add a default routine
-INSERT INTO routines (user_id, name, description) VALUES (1, 'Push Day', 'Chest, Shoulders, and Triceps');
+PAYMENTS — all payments with revenue KPIs and receipts
+
+PENDING — verify/reject/resend QR payment emails
+
+TRANSACTIONS — change membership and rental statuses with auto-refund
+
+COACHES — assign coaches to clients
+
+INVENTORY — full CRUD for rental equipment
+
+EXERCISES — full CRUD for the exercise library
+
+Needed Dependencies (install in order)
+Part 1: Backend Dependencies (root FitForge folder)
+Make sure your terminal is in the FitForge root (where server.js lives). Run:
+npm install express cors cookie-parser dotenv mysql2 mongoose jsonwebtoken bcryptjs nodemailer qrcode
+
+For auto-restart during development (recommended):
+npm install --save-dev nodemon
+
+Part 2: Frontend Dependencies (client folder)
+Navigate into the client folder:
+cd client
+
+run:
+npm install react react-dom react-router-dom axios recharts
+npm install --save-dev vite @vitejs/plugin-react tailwindcss @tailwindcss/vite postcss
 
 
-Features: (to be updated):
-Current Implemented Features:
+Before starting — make sure:
 
-1. Dashboard (Frontend): Uses Recharts to display progress graphs, average 1RM, and personal records (PRs).
+XAMPP MySQL is running
 
-2. Routines (Frontend & Backend): Create, view, update, and delete workout routines. Supports adding multiple exercises with default sets, reps, and weights to a routine.
+.env file exists in the project root with all variables filled in
 
-3. Log Workout (Frontend & Backend): Allows users to select an exercise (dropdown), input weight and reps, add multiple sets, add notes, and save the workout to the database.
+MongoDB Atlas IP whitelist includes your current IP
 
-4. Workout History (Frontend & Backend): Displays past workouts formatted in a clean card layout, showing dates and specific sets. It also shows a "PR" badge if the backend flags a set as a personal record.
-
-5. Analytics API (Backend): Calculates estimated 1RM over time using the Brzycki formula, generates moving averages, and identifies recent PRs using advanced SQL (CTEs and Window functions).
-
-6. Database Transactions: The backend uses transactions for inserting routines and workouts to ensure all-or-nothing data integrity.
-
-Planned / Future Features (Next Steps):
-
-1. JWT Authentication: Currently, userId is hardcoded to 1. The next major step is building Login/Register pages, issuing JSON Web Tokens (using your JWT_SECRET), and passing them from the frontend to the backend.
-
-2. Frontend Styling & Responsiveness: The basic dark theme works, but you can later add Tailwind CSS or Material UI for a more polished look.
-
-3. Enable detectAndUpdatePRs: The complex SQL query for auto-detecting PRs is currently commented out due to SQL strictness issues; you can optimize and re-enable it later.
-
-4.  Profile (User) (Who uses the app)
-
-5. Login Feature: (User account or admin) + Email
-
-6. Admin page (All data of the whole website stored there + they can edit the features)
-
-7. Password Hashing (ah483884****)
-
-8.  Homepage (about FitForge)
-
-9.  Gym membership (walk ins, monthly membership and yearly membership)
-
-10.  Cash payment integration (gcash, paymaya etc)
-
-11.  gym rental (gym equipment barbels etc)
-
-12.  Fitforge Logo
-
-13.  Graphs (admin page implementation) Shows how many users logged in and shows how many workouts they did per daily/weekly and monthly/yearly)
-
-14.  Light and dark mode for the website
-
-15.  Recommended Gym Workout (suggestion panel for the home page)
-
-16.  All types of workout information and the recommended Gym rental equipment (2nd page) 
-
-TBA FOR FUTURE ANNOUNCEMENTS
 
 
 
