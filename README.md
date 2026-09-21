@@ -1,6 +1,7 @@
 # CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 Project Repository for CCSFEN1L (Software Engineering)
 **NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)**
+Please read the Fitforge-Manual.pdf for precise instructions and kindly read the fitforge-features.pdf for the explanation of the features mentioned below:
 <br>
 <br>
 Folder Structure:
@@ -302,6 +303,34 @@ XAMPP MySQL is running
 
 MongoDB Atlas IP whitelist includes your current IP
 
+Implemented Features:
+1. Authentication & Accounts
+
+2. Workout Tracking
+
+3. Routine Builder
+
+4. Analytics Dashboard
+
+5. Exercise Library
+
+6. Membership System
+
+7. Payment Processing
+
+8. Equipment Rentals
+
+9. Personal Coaching
+
+10. Admin Dashboard
+
+11. User Interface
+
+12. Backend Systems
+
+13. Data Model
+
+**TBA FOR FUTURE ANNOUNCEMENTS**
 
 
 
