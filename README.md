@@ -7,101 +7,99 @@ Folder Structure:
 
 ```
 FitForge/
+├── .env                                Environment variables (not committed)
+├── .env.example                        Template with placeholder values
+├── .gitignore                          Excludes node_modules, .env, etc.
+├── package.json                        Backend dependencies & scripts
+├── server.js                           Express entry point
+├── README.md
 │
-├── ⚙️ CONFIG & ROOT FILES
-│   ├── .env                       # Environment variables (DB credentials, JWT secrets, SMTP)
-│   ├── .env.example               # Configuration template for developers
-│   ├── .gitignore                 # Excludes node_modules, .env, build outputs
-│   ├── package.json               # Server dependencies (Express, Mongoose, MySQL2, Nodemailer)
-│   ├── server.js                  # Express application entry point & server setup
-│   └── README.md                  # Project overview, setup, and execution instructions
+├── db/
+│   ├── mysql.js                        MySQL connection pool
+│   ├── mongo.js                        MongoDB connection (Mongoose)
+│   └── migrations/
+│       ├── 001_extend_schema.sql
+│       ├── 002_fitforge_extension.sql
+│       ├── 003_core_feature_columns.sql
+│       ├── 004_routine_columns.sql
+│       └── 005_coach_feature.sql
 │
-├── 🗄️ DATABASE (`/db`)
-│   ├── mysql.js                   # MySQL connection pool setup (mysql2)
-│   ├── mongo.js                   # MongoDB connection client (Mongoose)
-│   └── migrations/                # Version-controlled relational database migrations
-│       ├── 001_extend_schema.sql          # Initial schema expansions
-│       ├── 002_fitforge_extension.sql     # Core domain tables (Users, Memberships, Rentals)
-│       ├── 003_core_feature_columns.sql   # Additions for tracking & analytics
-│       ├── 004_routine_columns.sql        # Exercise & workout routine tables
-│       └── 005_coach_feature.sql          # Coach-to-client relation tables
+├── middleware/
+│   └── auth.js                         authenticate, requireAdmin, requireCoach
 │
-├── 🛡️ MIDDLEWARE (`/middleware`)
-│   └── auth.js                    # Auth guards (JWT authentication, requireAdmin, requireCoach)
+├── models/
+│   └── mongo/
+│       ├── ActivityLog.js              Every user event
+│       ├── PaymentLog.js               Payments with flexible details
+│       └── AdminMetric.js              Daily aggregated counters
 │
-├── 📄 MONGO SCHEMAS & MODELS (`/models/mongo`)
-│   ├── ActivityLog.js             # High-throughput event audit logging schema
-│   ├── PaymentLog.js              # Semi-structured payment payloads & metadata
-│   └── AdminMetric.js             # Pre-aggregated daily system metrics snapshot schema
+├── services/
+│   ├── activityLogger.js               Writes to MongoDB on every action
+│   ├── prDetection.js                  Epley 1RM computation + PR update
+│   ├── recommendation.js               Suggests neglected muscle groups
+│   └── mailer.js                       Gmail SMTP, QR emails, result emails
 │
-├── ⚙️ BACKEND SERVICES & LOGIC (`/services`)
-│   ├── activityLogger.js          # Writes user interaction events directly to MongoDB
-│   ├── prDetection.js             # Epley 1RM formula processing & PR tracking engine
-│   ├── recommendation.js          # Volume analysis algorithm for muscle balance suggestions
-│   └── mailer.js                  # SMTP mail service (Gmail integration, receipt & QR emails)
+├── routes/
+│   ├── auth.js                         Register, login, me, update profile
+│   ├── admin.js                        All admin endpoints (26 routes)
+│   ├── coaches.js                      Coach-facing endpoints
+│   ├── myCoach.js                      Client-facing endpoints
+│   ├── memberships.js                  Membership CRUD
+│   ├── payments.js                     Payment creation, QR, verify, resend
+│   ├── rentals.js                      Rental transactions
+│   ├── recommendations.js              Workout recommendations
+│   ├── routines.js                     Routine CRUD
+│   ├── workouts.js                     Workout logging with PR detection
+│   ├── analytics.js                    Volume, PRs, muscle balance
+│   └── exercises.js                    Exercise library
 │
-├── 🚦 API ROUTES & ENDPOINTS (`/routes`)
-│   ├── auth.js                    # POST /register, POST /login, GET /me, PUT /profile
-│   ├── admin.js                   # Management dashboard logic (26 administrative REST routes)
-│   ├── coaches.js                 # Coach actions (managing clients, providing feedback)
-│   ├── myCoach.js                 # Client actions (viewing coach notes & assigned plans)
-│   ├── memberships.js             # Subscription tier management & enrollment
-│   ├── payments.js                # Payment creation, QR code generation, verification & receipts
-│   ├── rentals.js                 # Equipment checkout and return transactions
-│   ├── recommendations.js        # Dynamic muscle balance recommendation routes
-│   ├── routines.js                # User routine creation and management CRUD
-│   ├── workouts.js                # Workout logging, history & automated PR computation
-│   ├── analytics.js               # Performance data aggregation (Volume, PRs, Muscle distribution)
-│   └── exercises.js               # Global exercise catalog lookup endpoints
-│
-└── 🖥️ FRONTEND CLIENT (`/client`)
-    ├── index.html                 # Main HTML DOM root element
-    ├── package.json               # Frontend dependencies (React, Axios, Vite, Tailwind v4)
-    ├── vite.config.js             # Vite builder configuration with Tailwind v4 plugin
+└── client/
+    ├── index.html                      HTML entry point
+    ├── package.json                    Frontend dependencies
+    ├── vite.config.js                  Vite + Tailwind v4 plugin
     ├── public/
-    │   └── logo.png               # Application branding assets
-    └── src/                       # React source application code
-        ├── index.jsx              # React DOM entry point
-        ├── index.css              # Global styles, Tailwind directives & dark mode overrides
-        ├── api.js                 # Centralized Axios client instance with JWT auto-inject interceptors
-        ├── App.jsx                # Application root component with React Router mapping
+    │   └── logo.png                    Static logo asset
+    └── src/
+        ├── index.jsx                   React entry point
+        ├── index.css                   Tailwind imports + dark mode variant
+        ├── api.js                      Axios instance with interceptors
+        ├── App.jsx                     Root component + route definitions
         │
-        ├── 🔑 STATE MANAGEMENT (`src/context`)
-        │   ├── AuthContext.jsx    # User session state, JWT tokens & active user permissions
-        │   ├── ThemeContext.jsx   # Light/Dark mode state management
-        │   └── ToastContext.jsx   # App-wide floating alert notifications
+        ├── context/
+        │   ├── AuthContext.jsx         User session + JWT management
+        │   ├── ThemeContext.jsx        Light/dark mode toggle
+        │   └── ToastContext.jsx        Global toast notifications
         │
-        ├── 🧱 UI COMPONENTS (`src/components`)
-        │   ├── Navbar.jsx         # Dynamic navigation bar tailored by active user role
-        │   ├── ProtectedRoute.jsx # Route authentication & authorization guards
-        │   ├── Card.jsx           # Reusable container wrapper component
-        │   ├── Receipt.jsx        # Printable payment transaction summary modal
-        │   ├── QRModal.jsx        # Payment QR code renderer & resend trigger
-        │   └── admin/             # Dedicated admin widgets
-        │       ├── RentalInventory.jsx  # Equipment tracking CRUD interface
-        │       ├── ExerciseLibrary.jsx  # Global exercise catalog manager
-        │       ├── RevenueChart.jsx     # Visual financial breakdown (Method/Purpose/Date)
-        │       ├── UserDetailModal.jsx  # Full user audit & account management modal
-        │       └── CoachManagement.jsx  # Client-to-coach assignment console
+        ├── components/
+        │   ├── Navbar.jsx              Role-aware navigation bar
+        │   ├── ProtectedRoute.jsx      Auth guards (Protected, Admin, Coach)
+        │   ├── Card.jsx                Reusable card component
+        │   ├── Receipt.jsx             Payment receipt modal
+        │   ├── QRModal.jsx             QR display + email resend
+        │   └── admin/
+        │       ├── RentalInventory.jsx Full CRUD for rental items
+        │       ├── ExerciseLibrary.jsx Full CRUD for exercises
+        │       ├── RevenueChart.jsx    Daily/method/purpose revenue charts
+        │       ├── UserDetailModal.jsx Full user drill-down modal
+        │       └── CoachManagement.jsx Coach assignment interface
         │
-        └── 📱 PAGE VIEWS (`src/pages`)
-            ├── Home.jsx           # Public landing page with service overview
-            ├── Login.jsx          # Authentication login form
-            ├── Register.jsx       # Account registration screen
-            ├── Profile.jsx        # User account dashboard (Membership history & receipts)
-            ├── Admin.jsx          # Central management console (10 tabbed sub-interfaces)
-            ├── Membership.jsx     # Subscription plan browser & payment flow
-            ├── Rentals.jsx        # Gear rental catalog & checkout system
-            ├── Recommendations.jsx Dynamic exercise recommendation feedback
-            ├── Workouts.jsx       # Daily workout logger & history viewer
-            ├── Routines.jsx       # Custom workout plan builder
-            ├── Analytics.jsx      # Personal progress graphs (Volume, PRs, balance charts)
-            ├── Exercises.jsx      # Searchable exercise database viewer
-            ├── VerifyPayment.jsx  # Public QR code payment confirmation page
-            ├── MyCoach.jsx        # Client portal for feedback from assigned coach
-            ├── Coach.jsx          # Coach dashboard listing active assigned clients
-            └── CoachClient.jsx    # Client analysis view & message submission for coaches
-
+        └── pages/
+            ├── Home.jsx                Homepage with About section
+            ├── Login.jsx               Login form
+            ├── Register.jsx            Registration form
+            ├── Profile.jsx             User profile with memberships & receipts
+            ├── Admin.jsx               Admin dashboard (10 tabs)
+            ├── Membership.jsx          Subscription plans & payment
+            ├── Rentals.jsx             Equipment rental catalog
+            ├── Recommendations.jsx     Suggested exercises
+            ├── Workouts.jsx            Workout logging & history
+            ├── Routines.jsx            Routine builder
+            ├── Analytics.jsx           Volume, PRs, muscle balance charts
+            ├── Exercises.jsx           Exercise library browser
+            ├── VerifyPayment.jsx       Public QR verification page
+            ├── MyCoach.jsx             Client's view of coach feedback
+            ├── Coach.jsx               Coach dashboard
+            └── CoachClient.jsx         Client detail + send feedback
 ```
 
 
