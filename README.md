@@ -1,7 +1,7 @@
 # CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 Project Repository for CCSFEN1L (Software Engineering)
 **NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)**
-Please read the Fitforge-Manual.pdf for precise instructions and kindly read the fitforge-features.pdf for the explanation of the features mentioned below:
+Please read the Fitforge-Manual.pdf for precise instructions and kindly read the FitForge-Features.pdf for a complete explanation of the features mentioned below:
 <br>
 <br>
 Folder Structure:
