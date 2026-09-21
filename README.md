@@ -111,7 +111,7 @@ FitForge Logo:
 <img width="757" height="685" alt="logo" src="https://github.com/user-attachments/assets/80525ab6-58b5-4248-a652-662bc1863d85" />
 
 
-**PRE REQUISITES:**
+**PRE-REQUISITES:**
 Node.js installed (v18 or higher recommended)
 
 XAMPP installed — MAKE SURE MySQL and Apache services are running
