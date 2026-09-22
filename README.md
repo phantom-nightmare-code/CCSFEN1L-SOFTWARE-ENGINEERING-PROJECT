@@ -14,7 +14,6 @@ FitForge/
 ├── .gitignore                          Excludes node_modules, .env, etc.
 ├── package.json                        Backend dependencies & scripts
 ├── server.js                           Express entry point
-├── README.md
 │
 ├── db/
 │   ├── mysql.js                        MySQL connection pool
