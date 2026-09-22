@@ -1,7 +1,7 @@
 # CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 Project Repository for CCSFEN1L (Software Engineering)
 **NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)**
-**The Migration part is also the schema used in XAMPP; you can run it manually in phpMyAdmin via XAMPP. You do not need to run it anymore if you run the schema in sql script for xampp.sql, treat the migration part as static source code after doing the said instructions here.**
+**The Migration part is also the schema used in XAMPP; you can run it manually in phpMyAdmin via XAMPP. You no longer need to run it. If you run the schema in the xampp.sql script, treat the migration part as static source code after you complete the instructions here. If you have any further questions feel free to reach out to me thanks**
 Please read the Fitforge-Manual.pdf for precise instructions and kindly read the FitForge-Features.pdf for a complete explanation of the features mentioned below:
 <br>
 <br>
