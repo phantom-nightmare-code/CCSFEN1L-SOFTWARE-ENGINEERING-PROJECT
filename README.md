@@ -5,7 +5,7 @@ Project Repository for CCSFEN1L (Software Engineering)
 Please read the Fitforge-Manual.pdf for precise instructions and kindly read the FitForge-Features.pdf for a complete explanation of the features mentioned below:
 <br>
 <br>
-Folder Structure:
+Folder Structure (Follow as is; do not change anything):**
 
 ```
 FitForge/
