@@ -124,7 +124,7 @@ VS Code (or any code editor)
 
 
 Step 1: Database Setup (MySQL)
-Open XAMPP Control Panel and start MySQL.
+Open XAMPP Control Panel and start MySQL and Apache.
 
 Open phpMyAdmin (http://localhost/phpmyadmin), click the SQL tab, and run the full schema script provided at the bottom of this document.
 
