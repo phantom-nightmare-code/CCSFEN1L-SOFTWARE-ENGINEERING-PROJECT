@@ -1,7 +1,7 @@
 # CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 Project Repository for CCSFEN1L (Software Engineering)
 **NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)** <br> <br>
-**The Migration part is also the schema used in XAMPP; you can run it manually in phpMyAdmin via XAMPP. You no longer need to run it. If you run the schema in the xampp.sql script, treat the migration part as static source code after you complete the instructions here. If you have any further questions, feel free to reach out to me. Thanks. <br> <br>
+**The Migration part is also the schema used in XAMPP; you can run it manually in phpMyAdmin via XAMPP. You no longer need to run it. If you run the schema in the sql script for xampp.sql, treat the migration part as static source code after you complete the instructions here. If you have any further questions, feel free to reach out to me. Thanks. <br> <br>
 Please read the Fitforge-Manual.pdf for precise instructions and kindly read the FitForge-Features.pdf for a complete explanation of the features mentioned below:
 <br>
 <br>
@@ -126,7 +126,7 @@ VS Code (or any code editor)
 Step 1: Database Setup (MySQL)
 Open XAMPP Control Panel and start MySQL and Apache.
 
-Open phpMyAdmin (http://localhost/phpmyadmin), click the SQL tab, and run the full schema script provided at the bottom of this document.
+Open phpMyAdmin (http://localhost/phpmyadmin), click the SQL tab, and run the full schema script provided (sql script for xampp.sql).
 
 Verify: In phpMyAdmin, click fitforge in the left sidebar — you should see 12 tables:
 
