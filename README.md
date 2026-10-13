@@ -1,8 +1,71 @@
 # CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 Project Repository for CCSFEN1L (Software Engineering)
 **NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)** <br> <br>
-**The Migration part is also the schema used in XAMPP; you can run it manually in phpMyAdmin via XAMPP. You no longer need to run it. If you run the schema in the sql script for xampp.sql, treat the migration part as static source code after you complete the instructions here. If you have any further questions, feel free to reach out to me. Thanks. <br> <br>
-Please read the Fitforge-Manual.pdf for precise instructions and kindly read the FitForge-Features.pdf for a complete explanation of the features mentioned below:
+# FitForge 💪
+
+> **Your move, your progress.**
+
+FitForge is a full-stack gym management and workout tracking platform that brings together workout logging, routine building, analytics, membership management, equipment rentals, and personal coaching into a single, modern web application.
+
+[![Live Demo](https://img.shields.io/badge/Live_Demo-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://fitforge-gym-and-track.netlify.app)
+[![Backend API](https://img.shields.io/badge/Backend_API-4A90E2?style=for-the-badge&logo=render&logoColor=white)](https://fitforge-backend-wey2.onrender.com)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/Node.js-20.x-339933?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org/)
+[![React](https://img.shields.io/badge/React-18-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://reactjs.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://www.mysql.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-Atlas-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/atlas)
+
+---
+
+## 📖 About
+
+FitForge is a gym companion built for people who take their training seriously. Most fitness apps do one thing well — but FitForge brings every part of your fitness journey into a single platform: from the moment you walk in the door, through every rep and set, to the analytics that tell you what's working.
+
+### ✨ Key Features
+
+- **🔐 Authentication & Accounts** — Register, login, JWT sessions, and three user roles (user, coach, admin).
+- **🏋️ Workout Tracking** — Log workouts with sets, reps, and weight. Automatic PR detection using the Epley 1RM formula.
+- **📋 Routine Builder** — Create reusable workout templates and launch them in one click.
+- **📊 Analytics Dashboard** — Volume charts, muscle balance pies, and a full personal records table.
+- **💳 Membership System** — Walk-in, monthly, and yearly plans with expiry tracking and auto-refund on cancellation.
+- **💸 Payment Processing** — GCash, Maya, bank transfer, card, and cash. QR code verification for digital payments via email.
+- **🏋️ Equipment Rentals** — Hourly reservations with live stock tracking and automatic receipts.
+- **🎯 Personal Coaching** — Coach-client assignments, detailed feedback with ratings, and unread badges.
+- **🛡️ Admin Dashboard** — 10 tabs for complete control over users, payments, memberships, rentals, inventory, and coaching.
+- **🌗 User Interface** — Dark/light mode, responsive layout, toast notifications, and role-aware navigation.
+
+---
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Backend** | Node.js, Express |
+| **Frontend** | React 18, React Router, Recharts, Vite |
+| **Styling** | Tailwind CSS v4 |
+| **Primary Database** | MySQL 8 (Aiven) |
+| **Secondary Database** | MongoDB Atlas |
+| **Authentication** | JWT, bcrypt |
+| **Email** | Nodemailer, Gmail SMTP |
+| **QR Codes** | `qrcode` npm library |
+| **Deployment** | Netlify (frontend), Render (backend) |
+
+---
+
+## 🚀 Getting Started (Local Development)
+
+### Prerequisites
+
+- Node.js 18+ and npm
+- XAMPP (MySQL)
+- MongoDB Atlas account (free tier)
+- Gmail account with 2-Step Verification enabled (for SMTP)
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/phantom-nightmare-code/CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT.git
+cd CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
 <br>
 <br>
 Folder Structure (Follow as is; do not change anything):**
@@ -111,204 +174,6 @@ FitForge Logo:
 <img width="757" height="685" alt="logo" src="https://github.com/user-attachments/assets/80525ab6-58b5-4248-a652-662bc1863d85" />
 
 
-**PRE-REQUISITES:**
-Node.js installed (v18 or higher recommended)
-
-XAMPP installed — MAKE SURE MySQL and Apache services are running
-
-MongoDB Atlas account (free tier) — for payments, activity logs, and analytics rollups
-
-Gmail account with 2-Step Verification enabled — for sending payment QR codes and receipts
-
-VS Code (or any code editor)
-
-
-Step 1: Database Setup (MySQL)
-Open XAMPP Control Panel and start MySQL and Apache.
-
-Open phpMyAdmin (http://localhost/phpmyadmin), click the SQL tab, and run the full schema script provided (sql script for xampp.sql).
-
-Verify: In phpMyAdmin, click fitforge in the left sidebar — you should see 12 tables:
-
-users, exercises, routines, routine_exercises
-
-workouts, workout_sets, personal_records
-
-memberships, rental_items, rentals
-
-coach_clients, coach_feedback
-
-**Step 2: MongoDB Atlas Setup**
-Sign up at https://cloud.mongodb.com (free M0 cluster).
-
-Create a database user (Database Access → Add New User):
-
-Username: fitforge_user
-
-Password: something strong (alphanumeric only — avoid special characters)
-
-Role: Read and write to any database
-
-Whitelist your IP (Network Access → Add IP Address → Add Current IP).
-
-Tip: Use 0.0.0.0/0 for development if your home IP changes often.
-
-Get your connection string:
-
-Click Connect on your cluster → Drivers → Node.js
-
-Copy the string (looks like mongodb+srv://fitforge_user:<password>@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority)
-
-Replace <password> with your actual password
-
-Insert /fitforge before the ? — e.g., .../fitforge?retryWrites=true...
-
-
-Step 3: Gmail App Password Setup
-1. Go to https://myaccount.google.com/security
-
-2. Enable 2-Step Verification (required).
-
-3. Go to https://myaccount.google.com/apppasswords
-
-4. Create a new app password — name it "FitForge Mailer".
-
-5. Copy the 16-character password (remove spaces).
-
-
-Step 4: Backend Setup
-1. Open VS Code. In your root FitForge folder, create a file named .env and paste:
-
-PORT=5000
-NODE_ENV=development
-
-MYSQL_HOST=localhost
-MYSQL_PORT=3306
-MYSQL_USER=root
-MYSQL_PASSWORD=
-MYSQL_DATABASE=fitforge
-
-MONGO_URI=mongodb+srv://fitforge_user:YOUR_PASSWORD@cluster0.xxxxx.mongodb.net/fitforge?retryWrites=true&w=majority
-
-JWT_SECRET=your_64_char_random_hex_string_here
-JWT_EXPIRES_IN=7d
-
-EMAIL_USER=your.email@gmail.com
-EMAIL_PASS=your_16_char_app_password
-EMAIL_CC_ADMIN=
-
-CLIENT_URL=http://localhost:5173
-
-In the terminal, run:
-npm install
-
-Start the backend:
-npm run dev
-
-Leave this terminal open. You should see:
-🚀 FitForge API on :5000
-✅ MySQL connected
-✅ MongoDB connected
-
-Step 5: Frontend Setup
-Open a new terminal tab in VS Code.
-
-Navigate to the client folder:
-cd client
-
-Install dependencies:
-npm install
-
-Start the frontend:
-npm run dev
-Leave this terminal open. The app opens at http://localhost:5173
-
-Step 6: Create Your First Admin
-Option A — Register then promote (easiest):
-
-Go to http://localhost:5173/register and create an account.
-
-Open phpMyAdmin → fitforge → SQL tab and run:
-UPDATE users SET role='admin' WHERE email='admin@fitforge.local';
-Log out and log back in — the Admin tab appears in the navbar.
-
-Step 7: Using the App
-As a regular user:
-
-Log Workout: Click "Log a workout" → enter name, date → add sets (select exercise, weight, reps) → Save. If a new record is set, a toast confirms "N new PR(s)!"
-
-View History: Click "Workouts" → expand any workout to see all sets.
-
-Build Routines: Click "Routines" → "+ New routine" → name it, add exercises with target sets/reps → Save. Click "Start" on any routine to launch a workout.
-
-Analytics: Click "Analytics" → volume chart, muscle balance pie, and PR table update automatically. Use range selector for 7/30/90/365 days.
-
-Exercise Library: Click "Exercises" → filter by muscle group or equipment, search by name.
-
-Membership: Click "Membership" → pick a plan → choose payment method. Cash/Card activate instantly. GCash/Maya/Bank trigger a QR code emailed to you.
-
-Rentals: Click "Rentals" → pick equipment → reserve for 2 hours → return when done.
-
-My Coach: If assigned to a coach, click "My Coach" → see all feedback with unread badges.
-
-Profile: Click "Profile" → edit name/username/birthday, view membership expiry countdown, transactions with receipts, and active rentals.
-
-As a coach:
-
-Click Coach in the navbar → see all assigned clients as cards.
-
-Click a client → view their workout history, PRs, and membership status.
-
-Send feedback with subject, content, optional star rating, and workout attachment.
-
-As an admin:
-
-Click Admin → 10 tabs available:
-
-PROFILE — your admin card + all users grid
-
-STATS — user counts, login chart, daily revenue, payment breakdown
-
-USERS — role management (promote to coach, reset to user)
-
-ACTIVITY — MongoDB activity feed
-
-PAYMENTS — all payments with revenue KPIs and receipts
-
-PENDING — verify/reject/resend QR payment emails
-
-TRANSACTIONS — change membership and rental statuses with auto-refund
-
-COACHES — assign coaches to clients
-
-INVENTORY — full CRUD for rental equipment
-
-EXERCISES — full CRUD for the exercise library
-
-Needed Dependencies (install in order)
-Part 1: Backend Dependencies (root FitForge folder)
-Make sure your terminal is in the FitForge root (where server.js lives). Run:
-npm install express cors cookie-parser dotenv mysql2 mongoose jsonwebtoken bcryptjs nodemailer qrcode
-
-For auto-restart during development (recommended):
-npm install --save-dev nodemon
-
-Part 2: Frontend Dependencies (client folder)
-Navigate into the client folder:
-cd client
-
-run:
-npm install react react-dom react-router-dom axios recharts
-npm install --save-dev vite @vitejs/plugin-react tailwindcss @tailwindcss/vite postcss
-
-
-Before starting — make sure:
-
-XAMPP MySQL is running
-
-.env file exists in the project root with all variables filled in
-
-MongoDB Atlas IP whitelist includes your current IP
 
 Implemented Features:
 1. Authentication & Accounts
@@ -339,5 +204,7 @@ Implemented Features:
 
 **TBA FOR FUTURE ANNOUNCEMENTS**
 
+Access the app here:
+https://fitforge-gym-and-track.netlify.app/
 
 
