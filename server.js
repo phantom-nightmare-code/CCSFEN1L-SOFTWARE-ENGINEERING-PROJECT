@@ -8,12 +8,30 @@ const connectMongo = require('./db/mongo');
 
 const app = express();
 
-app.use(cors({ origin: true, credentials: true }));
+/* ---------- CORS ---------- */
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://localhost:3000',
+  process.env.CLIENT_URL,
+].filter(Boolean);
+
+app.use(cors({
+  origin: (origin, cb) => {
+    // Allow no-origin requests (curl, mobile, Postman)
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    console.warn(`[CORS] Blocked origin: ${origin}`);
+    return cb(null, false);
+  },
+  credentials: true,
+}));
+
 app.use(express.json());
 app.use(cookieParser());
 
 /* ---------- DB connections ---------- */
 connectMongo();
+
 pool.getConnection()
   .then(c => {
     console.log('✅ MySQL connected');
@@ -33,14 +51,15 @@ app.use('/api/memberships',     require('./routes/memberships'));
 app.use('/api/payments',        require('./routes/payments'));
 app.use('/api/rentals',         require('./routes/rentals'));
 app.use('/api/recommendations', require('./routes/recommendations'));
-
 app.use('/api/routines',        require('./routes/routines'));
 app.use('/api/workouts',        require('./routes/workouts'));
 app.use('/api/analytics',       require('./routes/analytics'));
 app.use('/api/exercises',       require('./routes/exercises'));
 
-/* ---------- Health ---------- */
-app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
+/* ---------- Health check ---------- */
+app.get('/api/health', (_req, res) =>
+  res.json({ ok: true, ts: Date.now(), env: process.env.NODE_ENV })
+);
 
 /* ---------- Error handler ---------- */
 app.use((err, _req, res, _next) => {
@@ -49,4 +68,8 @@ app.use((err, _req, res, _next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 FitForge API on :${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 FitForge API on :${PORT}`);
+  console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+});
