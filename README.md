@@ -63,6 +63,14 @@ FitForge is a gym companion built for people who take their training seriously. 
 
 ### 1. Clone the Repository
 
+<br>
+<br>
+FitForge Logo:
+<br>
+<br>
+<img width="757" height="685" alt="logo" src="https://github.com/user-attachments/assets/80525ab6-58b5-4248-a652-662bc1863d85" />
+
+
 ```bash
 
 #FOLDER STRUCTURE:
@@ -119,12 +127,6 @@ FitForge/
         ├── components/        # Navbar, Receipt, QRModal, etc.
         └── pages/             # Route components
 
-<br>
-<br>
-FitForge Logo:
-<br>
-<br>
-<img width="757" height="685" alt="logo" src="https://github.com/user-attachments/assets/80525ab6-58b5-4248-a652-662bc1863d85" />
 
 
 
