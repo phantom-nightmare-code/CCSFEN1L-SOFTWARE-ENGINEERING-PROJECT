@@ -86,13 +86,12 @@ router.post('/', authenticate, async (req, res, next) => {
       );
     }
 
-    // Email for methods needing verification
+    // Email for methods needing verification — fire-and-forget
+    // So the HTTP response returns immediately and the QR modal opens
     if (needsVerification) {
-      try {
-        await emailVerificationFor(payment, parseEmails(sendTo));
-      } catch (mailErr) {
-        console.error('⚠️  Email send failed:', mailErr.message);
-      }
+      emailVerificationFor(payment, parseEmails(sendTo))
+        .then(() => console.log(`[mailer] ✅ QR emailed for ${payment.reference}`))
+        .catch(err => console.error(`[mailer] ❌ Email failed for ${payment.reference}:`, err.message));
     }
 
     await logActivity({
