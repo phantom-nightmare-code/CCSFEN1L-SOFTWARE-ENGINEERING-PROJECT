@@ -2,7 +2,8 @@
 Project Repository for CCSFEN1L (Software Engineering)
 **NAME OF PROJECT: FITFORGE(GYM + EXERCISE WEBSITE)** <br> <br>
 # FitForge 💪
-
+Access the app here:
+https://fitforge-gym-and-track.netlify.app/
 > **Your move, your progress.**
 
 FitForge is a full-stack gym management and workout tracking platform that brings together workout logging, routine building, analytics, membership management, equipment rentals, and personal coaching into a single, modern web application.
@@ -130,36 +131,8 @@ FitForge/
 
 
 
-Implemented Features:
-1. Authentication & Accounts
 
-2. Workout Tracking
 
-3. Routine Builder
 
-4. Analytics Dashboard
-
-5. Exercise Library
-
-6. Membership System
-
-7. Payment Processing
-
-8. Equipment Rentals
-
-9. Personal Coaching
-
-10. Admin Dashboard
-
-11. User Interface
-
-12. Backend Systems
-
-13. Data Model
-
-**TBA FOR FUTURE ANNOUNCEMENTS**
-
-Access the app here:
-https://fitforge-gym-and-track.netlify.app/
 
 
