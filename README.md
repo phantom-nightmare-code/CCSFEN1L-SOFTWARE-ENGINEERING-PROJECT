@@ -65,11 +65,6 @@ FitForge is a gym companion built for people who take their training seriously. 
 
 ```bash
 
-git clone https://github.com/phantom-nightmare-code/CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT.git
-cd CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
-
-<br>
-<br>
 #FOLDER STRUCTURE:
 
 FitForge/
