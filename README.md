@@ -64,107 +64,65 @@ FitForge is a gym companion built for people who take their training seriously. 
 ### 1. Clone the Repository
 
 ```bash
+
 git clone https://github.com/phantom-nightmare-code/CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT.git
 cd CCSFEN1L-SOFTWARE-ENGINEERING-PROJECT
-<br>
-<br>
-Folder Structure (Follow as is; do not change anything):**
 
-```
+<br>
+<br>
+#FOLDER STRUCTURE:
+
 FitForge/
-├── .env                                Environment variables (not committed)
-├── .env.example                        Template with placeholder values
-├── .gitignore                          Excludes node_modules, .env, etc.
-├── package.json                        Backend dependencies & scripts
-├── server.js                           Express entry point
+├── .env                       # Environment variables (not committed)
+├── .env.example               # Template for .env
+├── .gitignore
+├── package.json               # Backend dependencies & scripts
+├── server.js                  # Express entry point
 │
 ├── db/
-│   ├── mysql.js                        MySQL connection pool
-│   ├── mongo.js                        MongoDB connection (Mongoose)
-│   └── migrations/
-│       ├── 001_extend_schema.sql
-│       ├── 002_fitforge_extension.sql
-│       ├── 003_core_feature_columns.sql
-│       ├── 004_routine_columns.sql
-│       └── 005_coach_feature.sql
+│   ├── mysql.js               # MySQL connection pool
+│   ├── mongo.js               # MongoDB connection (Mongoose)
+│   └── migrations/            # SQL schema migration files
 │
 ├── middleware/
-│   └── auth.js                         authenticate, requireAdmin, requireCoach
+│   └── auth.js                # JWT verification middleware
 │
 ├── models/
-│   └── mongo/
-│       ├── ActivityLog.js              Every user event
-│       ├── PaymentLog.js               Payments with flexible details
-│       └── AdminMetric.js              Daily aggregated counters
+│   └── mongo/                 # Mongoose schemas (ActivityLog, PaymentLog, AdminMetric)
 │
 ├── services/
-│   ├── activityLogger.js               Writes to MongoDB on every action
-│   ├── prDetection.js                  Epley 1RM computation + PR update
-│   ├── recommendation.js               Suggests neglected muscle groups
-│   └── mailer.js                       Gmail SMTP, QR emails, result emails
+│   ├── activityLogger.js      # Logs user actions to MongoDB
+│   ├── prDetection.js         # Epley 1RM computation + PR updates
+│   ├── recommendation.js      # Recommends exercises for neglected muscle groups
+│   └── mailer.js              # Gmail SMTP email sending
 │
-├── routes/
-│   ├── auth.js                         Register, login, me, update profile
-│   ├── admin.js                        All admin endpoints (26 routes)
-│   ├── coaches.js                      Coach-facing endpoints
-│   ├── myCoach.js                      Client-facing endpoints
-│   ├── memberships.js                  Membership CRUD
-│   ├── payments.js                     Payment creation, QR, verify, resend
-│   ├── rentals.js                      Rental transactions
-│   ├── recommendations.js              Workout recommendations
-│   ├── routines.js                     Routine CRUD
-│   ├── workouts.js                     Workout logging with PR detection
-│   ├── analytics.js                    Volume, PRs, muscle balance
-│   └── exercises.js                    Exercise library
+├── routes/                    # All API endpoints
+│   ├── auth.js
+│   ├── admin.js
+│   ├── coaches.js
+│   ├── myCoach.js
+│   ├── memberships.js
+│   ├── payments.js
+│   ├── rentals.js
+│   ├── recommendations.js
+│   ├── routines.js
+│   ├── workouts.js
+│   ├── analytics.js
+│   └── exercises.js
 │
-└── client/
-    ├── index.html                      HTML entry point
-    ├── package.json                    Frontend dependencies
-    ├── vite.config.js                  Vite + Tailwind v4 plugin
+└── client/                    # React frontend
+    ├── package.json
+    ├── vite.config.js
+    ├── netlify.toml
+    ├── index.html
     ├── public/
-    │   └── logo.png                    Static logo asset
+    │   └── logo.png
     └── src/
-        ├── index.jsx                   React entry point
-        ├── index.css                   Tailwind imports + dark mode variant
-        ├── api.js                      Axios instance with interceptors
-        ├── App.jsx                     Root component + route definitions
-        │
-        ├── context/
-        │   ├── AuthContext.jsx         User session + JWT management
-        │   ├── ThemeContext.jsx        Light/dark mode toggle
-        │   └── ToastContext.jsx        Global toast notifications
-        │
-        ├── components/
-        │   ├── Navbar.jsx              Role-aware navigation bar
-        │   ├── ProtectedRoute.jsx      Auth guards (Protected, Admin, Coach)
-        │   ├── Card.jsx                Reusable card component
-        │   ├── Receipt.jsx             Payment receipt modal
-        │   ├── QRModal.jsx             QR display + email resend
-        │   └── admin/
-        │       ├── RentalInventory.jsx Full CRUD for rental items
-        │       ├── ExerciseLibrary.jsx Full CRUD for exercises
-        │       ├── RevenueChart.jsx    Daily/method/purpose revenue charts
-        │       ├── UserDetailModal.jsx Full user drill-down modal
-        │       └── CoachManagement.jsx Coach assignment interface
-        │
-        └── pages/
-            ├── Home.jsx                Homepage with About section
-            ├── Login.jsx               Login form
-            ├── Register.jsx            Registration form
-            ├── Profile.jsx             User profile with memberships & receipts
-            ├── Admin.jsx               Admin dashboard (10 tabs)
-            ├── Membership.jsx          Subscription plans & payment
-            ├── Rentals.jsx             Equipment rental catalog
-            ├── Recommendations.jsx     Suggested exercises
-            ├── Workouts.jsx            Workout logging & history
-            ├── Routines.jsx            Routine builder
-            ├── Analytics.jsx           Volume, PRs, muscle balance charts
-            ├── Exercises.jsx           Exercise library browser
-            ├── VerifyPayment.jsx       Public QR verification page
-            ├── MyCoach.jsx             Client's view of coach feedback
-            ├── Coach.jsx               Coach dashboard
-            └── CoachClient.jsx         Client detail + send feedback
-```
+        ├── api.js
+        ├── App.jsx
+        ├── context/           # Auth, Theme, Toast providers
+        ├── components/        # Navbar, Receipt, QRModal, etc.
+        └── pages/             # Route components
 
 <br>
 <br>
