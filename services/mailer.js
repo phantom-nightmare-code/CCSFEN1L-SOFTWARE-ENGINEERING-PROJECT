@@ -1,10 +1,25 @@
 const nodemailer = require('nodemailer');
+const dns = require('dns');
+
+// Force IPv4 DNS resolution — Render's free tier doesn't support IPv6
+dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
+  },
+  // Force IPv4 connection
+  family: 4,
+  connectionTimeout: 15000,
+  greetingTimeout: 15000,
+  socketTimeout: 20000,
+  dnsTimeout: 5000,
+  tls: {
+    rejectUnauthorized: false,
   },
 });
 
@@ -59,7 +74,7 @@ async function sendPaymentVerificationEmail({
 
       <table style="width: 100%; font-size: 14px; color: #333; border-collapse: collapse;">
         <tr><td style="padding: 6px 0;"><strong>Reference:</strong></td><td style="text-align:right;">${reference}</td></tr>
-        <tr><td style="padding: 6px 0;"><strong>Amount:</strong></td><td style="text-align:right;">₱${Number(amount).toFixed(2)}</td></tr>
+        <tr><td style="padding: 6px 0;"><strong>Amount:</strong></td><td style="text-align:right;">PHP ${Number(amount).toFixed(2)}</td></tr>
         <tr><td style="padding: 6px 0;"><strong>Method:</strong></td><td style="text-align:right; text-transform: uppercase;">${method}</td></tr>
         <tr><td style="padding: 6px 0;"><strong>Purpose:</strong></td><td style="text-align:right; text-transform: capitalize;">${purpose}</td></tr>
         ${itemName ? `<tr><td style="padding: 6px 0;"><strong>Item:</strong></td><td style="text-align:right;">${itemName}</td></tr>` : ''}
@@ -89,7 +104,7 @@ async function sendPaymentVerificationEmail({
   const opts = {
     from: `"FitForge" <${process.env.EMAIL_USER}>`,
     replyTo: process.env.EMAIL_USER,
-    to: recipients,           // array — all as direct To
+    to: recipients,
     subject: `FitForge — Verify your payment (${reference})`,
     html,
   };
@@ -130,7 +145,7 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
         ${ok ? '✅ Payment Verified' : '❌ Payment Rejected'}
       </h2>
       <p style="color:#333;">
-        Your payment of <strong>₱${Number(amount).toFixed(2)}</strong>
+        Your payment of <strong>PHP ${Number(amount).toFixed(2)}</strong>
         (Ref: <span style="font-family:monospace;">${reference}</span>)
         has been <strong>${ok ? 'verified and confirmed' : 'rejected'}</strong>.
       </p>
