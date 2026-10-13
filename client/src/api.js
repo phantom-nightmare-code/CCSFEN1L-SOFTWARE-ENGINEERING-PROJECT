@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const api = axios.create({ baseURL: '/api' });
+// In production, VITE_API_URL is set by Netlify (e.g. https://xxx.onrender.com/api)
+// In local dev, Vite's proxy handles /api → http://localhost:5000
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || '/api',
+});
 
 api.interceptors.request.use((cfg) => {
   const token = localStorage.getItem('token');
