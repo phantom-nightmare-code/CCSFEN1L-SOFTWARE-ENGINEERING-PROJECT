@@ -1,8 +1,10 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const pool = require('../db/mysql');
 const { logActivity } = require('../services/activityLogger');
+const { sendWelcomeVerificationEmail } = require('../services/mailer');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -14,7 +16,6 @@ const signToken = (u) =>
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
-/* ---------- birthday validation helper ---------- */
 function validateBirthday(birthday) {
   if (!birthday) return null;
   const bd = new Date(birthday);
@@ -53,22 +54,138 @@ router.post('/register', async (req, res, next) => {
 
     const hash = await bcrypt.hash(password, 10);
 
+    // Generate verification token (valid 24 hours)
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
     const [result] = await pool.query(
-      `INSERT INTO users (username, email, password_hash, full_name, role, birthday)
-       VALUES (?, ?, ?, ?, 'user', ?)`,
+      `INSERT INTO users
+        (username, email, password_hash, full_name, role, birthday,
+         email_verified, verification_token, verification_expires_at)
+       VALUES (?, ?, ?, ?, 'user', ?, FALSE, ?, ?)`,
       [
         username || email.split('@')[0],
         email,
         hash,
         full_name || null,
         birthday || null,
+        verificationToken,
+        expiresAt,
       ]
     );
 
-    const user = { id: result.insertId, email, role: 'user', full_name };
-    await logActivity({ userId: user.id, action: 'register', req });
+    const userId = result.insertId;
 
-    res.status(201).json({ token: signToken(user), user });
+    await logActivity({
+      userId,
+      action: 'register',
+      req,
+      metadata: { email, verified: false },
+    });
+
+    // Fire-and-forget welcome email
+    const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
+    sendWelcomeVerificationEmail({
+      to: email,
+      fullName: full_name,
+      verifyUrl,
+    })
+      .then(() => console.log(`[auth] Welcome email sent to ${email}`))
+      .catch(err => console.error(`[auth] Welcome email failed for ${email}:`, err.message));
+
+    res.status(201).json({
+      message: 'Account created. Please check your email to verify.',
+      requiresVerification: true,
+      email,
+    });
+  } catch (err) { next(err); }
+});
+
+/* ---------- GET /api/auth/verify-email/:token ---------- */
+router.get('/verify-email/:token', async (req, res, next) => {
+  try {
+    const { token } = req.params;
+    if (!token) return res.status(400).json({ error: 'Missing verification token' });
+
+    const [rows] = await pool.query(
+      `SELECT id, email, email_verified, verification_expires_at
+       FROM users WHERE verification_token = ?`,
+      [token]
+    );
+
+    if (!rows.length)
+      return res.status(400).json({ error: 'Invalid or already-used verification link' });
+
+    const user = rows[0];
+
+    if (user.email_verified)
+      return res.json({ ok: true, alreadyVerified: true, email: user.email });
+
+    if (new Date(user.verification_expires_at) < new Date())
+      return res.status(410).json({ error: 'This verification link has expired. Please request a new one.' });
+
+    await pool.query(
+      `UPDATE users
+       SET email_verified = TRUE,
+           verification_token = NULL,
+           verification_expires_at = NULL
+       WHERE id = ?`,
+      [user.id]
+    );
+
+    await logActivity({
+      userId: user.id,
+      action: 'email_verified',
+      req,
+      metadata: { email: user.email },
+    });
+
+    res.json({ ok: true, email: user.email });
+  } catch (err) { next(err); }
+});
+
+/* ---------- POST /api/auth/resend-verification ---------- */
+router.post('/resend-verification', async (req, res, next) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email required' });
+
+    const [rows] = await pool.query(
+      'SELECT id, email, full_name, email_verified FROM users WHERE email = ?',
+      [email]
+    );
+
+    // Always return success — don't leak which emails are registered
+    if (!rows.length) {
+      return res.json({ ok: true, message: 'If the account exists and is unverified, an email was sent.' });
+    }
+
+    const user = rows[0];
+    if (user.email_verified) {
+      return res.json({ ok: true, message: 'This account is already verified. You can log in.' });
+    }
+
+    // Generate a fresh token
+    const verificationToken = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await pool.query(
+      `UPDATE users
+       SET verification_token = ?, verification_expires_at = ?
+       WHERE id = ?`,
+      [verificationToken, expiresAt, user.id]
+    );
+
+    const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
+    sendWelcomeVerificationEmail({
+      to: user.email,
+      fullName: user.full_name,
+      verifyUrl,
+    })
+      .then(() => console.log(`[auth] Verification resent to ${user.email}`))
+      .catch(err => console.error(`[auth] Resend failed for ${user.email}:`, err.message));
+
+    res.json({ ok: true, message: 'Verification email sent. Check your inbox.' });
   } catch (err) { next(err); }
 });
 
@@ -80,7 +197,7 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ error: 'Email and password are required' });
 
     const [rows] = await pool.query(
-      'SELECT id, email, password_hash, role, full_name FROM users WHERE email = ?',
+      'SELECT id, email, password_hash, role, full_name, email_verified FROM users WHERE email = ?',
       [email]
     );
     if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
@@ -91,6 +208,14 @@ router.post('/login', async (req, res, next) => {
 
     const ok = await bcrypt.compare(password, u.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+
+    if (!u.email_verified) {
+      return res.status(403).json({
+        error: 'Please verify your email before logging in. Check your inbox for the verification link.',
+        requiresVerification: true,
+        email: u.email,
+      });
+    }
 
     const user = { id: u.id, email: u.email, role: u.role, full_name: u.full_name };
     await logActivity({ userId: user.id, action: 'login', req });
@@ -103,7 +228,7 @@ router.post('/login', async (req, res, next) => {
 router.get('/me', authenticate, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, email, role, full_name, username, created_at, birthday
+      `SELECT id, email, role, full_name, username, created_at, birthday, email_verified
        FROM users WHERE id = ?`,
       [req.user.id]
     );
@@ -143,7 +268,7 @@ router.patch('/me', authenticate, async (req, res, next) => {
     await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, params);
 
     const [rows] = await pool.query(
-      `SELECT id, email, role, full_name, username, created_at, birthday
+      `SELECT id, email, role, full_name, username, created_at, birthday, email_verified
        FROM users WHERE id = ?`,
       [req.user.id]
     );
