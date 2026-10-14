@@ -65,16 +65,12 @@ export default function Register() {
         <div className="bg-white dark:bg-gray-900 p-8 rounded-xl shadow w-full max-w-sm space-y-4 border border-gray-100 dark:border-gray-800 text-center">
           <div className="text-5xl">📬</div>
           <h1 className="text-2xl font-bold">Check your email</h1>
-          <p className="text-sm text-gray-500">
-            We sent a verification link to:
-          </p>
+          <p className="text-sm text-gray-500">We sent a verification link to:</p>
           <p className="font-medium break-all">{form.email}</p>
           <p className="text-xs text-gray-500">
             Click the link in the email to activate your account. The link expires in 24 hours.
           </p>
-          <p className="text-xs text-gray-400">
-            Don't see it? Check your Spam folder.
-          </p>
+          <p className="text-xs text-gray-400">Don't see it? Check your Spam folder.</p>
 
           {!resent ? (
             <button
