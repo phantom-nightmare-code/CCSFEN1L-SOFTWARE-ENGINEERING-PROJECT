@@ -54,7 +54,7 @@ router.post('/register', async (req, res, next) => {
 
     const hash = await bcrypt.hash(password, 10);
 
-    // Generate verification token (valid 24 hours)
+    // Verification token (valid 24 hours)
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -155,7 +155,6 @@ router.post('/resend-verification', async (req, res, next) => {
       [email]
     );
 
-    // Always return success — don't leak which emails are registered
     if (!rows.length) {
       return res.json({ ok: true, message: 'If the account exists and is unverified, an email was sent.' });
     }
@@ -165,7 +164,6 @@ router.post('/resend-verification', async (req, res, next) => {
       return res.json({ ok: true, message: 'This account is already verified. You can log in.' });
     }
 
-    // Generate a fresh token
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
