@@ -1,18 +1,5 @@
-const nodemailer = require('nodemailer');
-
-// Brevo SMTP relay — works on Render where Gmail SMTP is blocked
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.BREVO_SMTP_USER,
-    pass: process.env.BREVO_SMTP_PASS,
-  },
-  connectionTimeout: 15000,
-  greetingTimeout: 15000,
-  socketTimeout: 20000,
-});
+// Brevo HTTPS API — works on Render where SMTP is blocked
+const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
 
 /* ---------- helpers ---------- */
 
@@ -28,14 +15,63 @@ function parseEmails(input) {
     .slice(0, 5);
 }
 
+function parseFrom(fromStr) {
+  // Accepts: 'Name <email@example.com>' or 'email@example.com'
+  if (!fromStr) return { name: 'FitForge', email: process.env.EMAIL_USER };
+  const match = fromStr.match(/^(.*)<(.+)>$/);
+  if (match) {
+    return { name: match[1].trim().replace(/^"|"$/g, ''), email: match[2].trim() };
+  }
+  return { name: 'FitForge', email: fromStr.trim() };
+}
+
+async function sendViaBrevo({ to, subject, html, cc }) {
+  const apiKey = process.env.BREVO_API_KEY;
+  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+
+  const sender = parseFrom(process.env.EMAIL_FROM);
+  const recipients = parseEmails(to).map(email => ({ email }));
+  if (!recipients.length) throw new Error('No valid recipients');
+
+  const body = {
+    sender,
+    to: recipients,
+    subject,
+    htmlContent: html,
+  };
+
+  if (cc && cc.length) {
+    body.cc = cc.map(email => ({ email }));
+  }
+
+  console.log('[mailer] POST → Brevo API', { to: recipients.map(r => r.email), subject });
+
+  const res = await fetch(BREVO_API_URL, {
+    method: 'POST',
+    headers: {
+      accept: 'application/json',
+      'api-key': apiKey,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const msg = data.message || data.error || `HTTP ${res.status}`;
+    console.error('[mailer] ❌ Brevo API error:', msg, data);
+    throw new Error(msg);
+  }
+
+  console.log('[mailer] ✅ Brevo accepted:', data.messageId || '(no id)');
+  return data;
+}
+
 /* ---------- WELCOME / VERIFICATION EMAIL ---------- */
 
 async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
-  const primary = parseEmails(to);
-  if (!primary.length) throw new Error('No valid recipient');
-
   const name = fullName || 'there';
-  const from = process.env.EMAIL_FROM || `FitForge <${process.env.EMAIL_USER}>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
@@ -72,20 +108,11 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
     </div>
   `;
 
-  console.log('[mailer] Sending welcome email →', primary);
-  try {
-    const info = await transporter.sendMail({
-      from,
-      to: primary,
-      subject: 'Verify your FitForge account 💪',
-      html,
-    });
-    console.log('[mailer] ✅ Welcome sent:', info.messageId, '→', info.accepted);
-    return info;
-  } catch (err) {
-    console.error('[mailer] ❌ Welcome failed:', err.message);
-    throw err;
-  }
+  return sendViaBrevo({
+    to,
+    subject: 'Verify your FitForge account 💪',
+    html,
+  });
 }
 
 /* ---------- PAYMENT VERIFICATION EMAIL ---------- */
@@ -94,14 +121,8 @@ async function sendPaymentVerificationEmail({
   to, additionalTo = [], qrDataUrl, reference,
   amount, method, purpose, itemName,
 }) {
-  const primary = parseEmails(to);
-  const extras = parseEmails(additionalTo);
-  const recipients = [...new Set([...primary, ...extras])];
-  if (!recipients.length) throw new Error('No valid recipient email addresses');
-
   const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const verifyUrl = `${process.env.CLIENT_URL}/verify-payment/${reference}`;
-  const from = process.env.EMAIL_FROM || `FitForge <${process.env.EMAIL_USER}>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
@@ -136,35 +157,27 @@ async function sendPaymentVerificationEmail({
     </div>
   `;
 
-  const opts = {
-    from,
-    to: recipients,
+  const allRecipients = [
+    ...parseEmails(to),
+    ...parseEmails(additionalTo),
+  ];
+  const uniqueRecipients = [...new Set(allRecipients)];
+
+  const cc = adminCc && EMAIL_RE.test(adminCc) && !uniqueRecipients.includes(adminCc.toLowerCase())
+    ? [adminCc]
+    : [];
+
+  return sendViaBrevo({
+    to: uniqueRecipients,
     subject: `FitForge — Verify your payment (${reference})`,
     html,
-  };
-
-  if (adminCc && EMAIL_RE.test(adminCc) && !recipients.includes(adminCc.toLowerCase())) {
-    opts.cc = adminCc;
-  }
-
-  console.log('[mailer] Sending payment verification →', recipients);
-  try {
-    const info = await transporter.sendMail(opts);
-    console.log('[mailer] ✅ Sent:', info.messageId, '→', info.accepted);
-    return info;
-  } catch (err) {
-    console.error('[mailer] ❌ Send failed:', err.message);
-    throw err;
-  }
+    cc,
+  });
 }
 
 async function sendPaymentResultEmail({ to, reference, amount, status, reason }) {
-  const primary = parseEmails(to);
-  if (!primary.length) throw new Error('No valid recipient');
-
   const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const ok = status === 'verified';
-  const from = process.env.EMAIL_FROM || `FitForge <${process.env.EMAIL_USER}>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
@@ -181,18 +194,17 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
     </div>
   `;
 
-  const opts = {
-    from,
+  const primary = parseEmails(to);
+  const cc = adminCc && EMAIL_RE.test(adminCc) && !primary.includes(adminCc.toLowerCase())
+    ? [adminCc]
+    : [];
+
+  return sendViaBrevo({
     to: primary,
     subject: `FitForge — Payment ${ok ? 'verified' : 'rejected'} (${reference})`,
     html,
-  };
-
-  if (adminCc && EMAIL_RE.test(adminCc) && !primary.includes(adminCc.toLowerCase())) {
-    opts.cc = adminCc;
-  }
-
-  return transporter.sendMail(opts);
+    cc,
+  });
 }
 
 module.exports = {
