@@ -54,7 +54,6 @@ router.post('/register', async (req, res, next) => {
 
     const hash = await bcrypt.hash(password, 10);
 
-    // Verification token (valid 24 hours)
     const verificationToken = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
 
@@ -83,7 +82,6 @@ router.post('/register', async (req, res, next) => {
       metadata: { email, verified: false },
     });
 
-    // Fire-and-forget welcome email
     const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
     sendWelcomeVerificationEmail({
       to: email,
