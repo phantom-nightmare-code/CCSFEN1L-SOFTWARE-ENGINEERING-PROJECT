@@ -4,6 +4,7 @@ const ActivityLog = require('../models/mongo/ActivityLog');
 const AdminMetric = require('../models/mongo/AdminMetric');
 const PaymentLog = require('../models/mongo/PaymentLog');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { logAdminAction } = require('../services/auditLogger');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
@@ -26,18 +27,36 @@ router.patch('/users/:id/role', async (req, res, next) => {
     const { role } = req.body;
     if (!['user', 'admin', 'coach'].includes(role))
       return res.status(400).json({ error: 'Invalid role' });
+
+    if (Number(req.params.id) === req.user.id)
+      return res.status(400).json({ error: 'You cannot change your own role' });
+
+    const [[oldUser]] = await pool.query(
+      'SELECT email, role FROM users WHERE id = ?', [req.params.id]
+    );
+    if (!oldUser) return res.status(404).json({ error: 'User not found' });
+
     await pool.query('UPDATE users SET role = ? WHERE id = ?', [role, req.params.id]);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'user_role_changed',
+      targetType: 'user',
+      targetId: Number(req.params.id),
+      details: { email: oldUser.email, from: oldUser.role, to: role },
+      req,
+    });
+
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
-/* GET /api/admin/users/:id/details */
 router.get('/users/:id/details', async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
 
     const [[user]] = await pool.query(
-      'SELECT id, email, username, full_name, role, created_at FROM users WHERE id = ?',
+      'SELECT id, email, username, full_name, role, created_at, birthday FROM users WHERE id = ?',
       [userId]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -74,17 +93,13 @@ router.get('/users/:id/details', async (req, res, next) => {
     res.json({
       user,
       stats: {
-        workoutCount,
-        prCount,
+        workoutCount, prCount,
         membershipCount: memberships.length,
         rentalCount: rentals.length,
         paymentCount: payments.length,
         totalSpent,
       },
-      memberships,
-      rentals,
-      workouts,
-      payments,
+      memberships, rentals, workouts, payments,
       activity: recentActivity,
     });
   } catch (err) { next(err); }
@@ -108,7 +123,6 @@ router.get('/stats', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* GET /api/admin/revenue?days=30 */
 router.get('/revenue', async (req, res, next) => {
   try {
     const days = Math.min(Number(req.query.days) || 30, 365);
@@ -117,13 +131,10 @@ router.get('/revenue', async (req, res, next) => {
     const [daily, byMethod, byPurpose] = await Promise.all([
       PaymentLog.aggregate([
         { $match: { status: 'paid', createdAt: { $gte: from } } },
-        {
-          $group: {
-            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
-            total: { $sum: '$amount' },
-            count: { $sum: 1 },
-          },
-        },
+        { $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          total: { $sum: '$amount' }, count: { $sum: 1 },
+        }},
         { $sort: { _id: 1 } },
       ]),
       PaymentLog.aggregate([
@@ -139,7 +150,6 @@ router.get('/revenue', async (req, res, next) => {
     ]);
 
     const grandTotal = daily.reduce((s, d) => s + d.total, 0);
-
     res.json({ daily, byMethod, byPurpose, grandTotal, days });
   } catch (err) { next(err); }
 });
@@ -153,6 +163,25 @@ router.get('/activity', async (req, res, next) => {
     const limit = Math.min(Number(req.query.limit) || 100, 500);
     const logs = await ActivityLog.find().sort({ createdAt: -1 }).limit(limit).lean();
     res.json(logs);
+  } catch (err) { next(err); }
+});
+
+/* ============================================================
+   AUDIT LOG
+   ============================================================ */
+
+router.get('/audit-log', async (req, res, next) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const [rows] = await pool.query(
+      `SELECT a.*, u.email AS admin_email, u.full_name AS admin_name
+       FROM admin_audit_log a
+       JOIN users u ON u.id = a.admin_id
+       ORDER BY a.created_at DESC
+       LIMIT ?`,
+      [limit]
+    );
+    res.json(rows);
   } catch (err) { next(err); }
 });
 
@@ -176,21 +205,20 @@ router.get('/memberships', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* PATCH /api/admin/memberships/:id/status */
 router.patch('/memberships/:id/status', async (req, res, next) => {
   try {
     const { status } = req.body;
     const id = Number(req.params.id);
 
-    if (!['active', 'cancelled', 'cancelled_refund'].includes(status))
+    if (!['active', 'cancelled', 'cancelled_refund', 'pending'].includes(status))
       return res.status(400).json({ error: 'Invalid status' });
 
     const [[existing]] = await pool.query(
-      'SELECT id FROM memberships WHERE id = ?', [id]
+      'SELECT id, type, user_id, status FROM memberships WHERE id = ?', [id]
     );
     if (!existing) return res.status(404).json({ error: 'Membership not found' });
 
-    const dbStatus = status === 'active' ? 'active' : 'cancelled';
+    const dbStatus = status === 'cancelled_refund' ? 'cancelled' : status;
     let paymentsRefunded = 0;
 
     await pool.query('UPDATE memberships SET status = ? WHERE id = ?', [dbStatus, id]);
@@ -208,6 +236,15 @@ router.patch('/memberships/:id/status', async (req, res, next) => {
       );
       paymentsRefunded = -r.modifiedCount;
     }
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'membership_status_changed',
+      targetType: 'membership',
+      targetId: id,
+      details: { from: existing.status, to: dbStatus, userId: existing.user_id },
+      req,
+    });
 
     res.json({ ok: true, status, paymentsRefunded });
   } catch (err) { next(err); }
@@ -234,14 +271,13 @@ router.get('/rentals', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* PATCH /api/admin/rentals/:id/status */
 router.patch('/rentals/:id/status', async (req, res, next) => {
   const conn = await pool.getConnection();
   try {
     const { status } = req.body;
     const id = Number(req.params.id);
 
-    if (!['reserved', 'confirmed', 'hold', 'available', 'cancelled'].includes(status))
+    if (!['reserved', 'confirmed', 'hold', 'available', 'cancelled', 'active', 'returned'].includes(status))
       return res.status(400).json({ error: 'Invalid status' });
 
     await conn.beginTransaction();
@@ -278,6 +314,15 @@ router.patch('/rentals/:id/status', async (req, res, next) => {
       paymentsRefunded = r.modifiedCount;
     }
 
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'rental_status_changed',
+      targetType: 'rental',
+      targetId: id,
+      details: { from: rental.status, to: status, itemId: rental.item_id },
+      req,
+    });
+
     res.json({ ok: true, status, paymentsRefunded });
   } catch (err) {
     await conn.rollback();
@@ -286,14 +331,12 @@ router.patch('/rentals/:id/status', async (req, res, next) => {
 });
 
 /* ============================================================
-   RENTAL ITEMS (inventory CRUD)
+   RENTAL ITEMS
    ============================================================ */
 
 router.get('/rental-items', async (_req, res, next) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM rental_items ORDER BY category, name'
-    );
+    const [rows] = await pool.query('SELECT * FROM rental_items ORDER BY category, name');
     res.json(rows);
   } catch (err) { next(err); }
 });
@@ -309,6 +352,16 @@ router.post('/rental-items', async (req, res, next) => {
        VALUES (?, ?, ?, ?, ?, ?)`,
       [name, category || null, description || null, hourly_rate, stock ?? 0, image_url || null]
     );
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'rental_item_created',
+      targetType: 'rental_item',
+      targetId: r.insertId,
+      details: { name, hourly_rate, stock },
+      req,
+    });
+
     res.status(201).json({ id: r.insertId });
   } catch (err) { next(err); }
 });
@@ -329,6 +382,16 @@ router.patch('/rental-items/:id', async (req, res, next) => {
 
     params.push(req.params.id);
     await pool.query(`UPDATE rental_items SET ${fields.join(', ')} WHERE id = ?`, params);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'rental_item_updated',
+      targetType: 'rental_item',
+      targetId: Number(req.params.id),
+      details: { fields: Object.keys(req.body) },
+      req,
+    });
+
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
@@ -337,7 +400,7 @@ router.delete('/rental-items/:id', async (req, res, next) => {
   try {
     const [[{ active }]] = await pool.query(
       `SELECT COUNT(*) AS active FROM rentals
-       WHERE item_id = ? AND status IN ('reserved','active')`,
+       WHERE item_id = ? AND status IN ('reserved','active','confirmed','hold')`,
       [req.params.id]
     );
     if (active > 0)
@@ -346,19 +409,26 @@ router.delete('/rental-items/:id', async (req, res, next) => {
       });
 
     await pool.query('DELETE FROM rental_items WHERE id = ?', [req.params.id]);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'rental_item_deleted',
+      targetType: 'rental_item',
+      targetId: Number(req.params.id),
+      req,
+    });
+
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
 /* ============================================================
-   EXERCISES (library CRUD)
+   EXERCISES
    ============================================================ */
 
 router.get('/exercises', async (_req, res, next) => {
   try {
-    const [rows] = await pool.query(
-      'SELECT * FROM exercises ORDER BY muscle_group, name'
-    );
+    const [rows] = await pool.query('SELECT * FROM exercises ORDER BY muscle_group, name');
     res.json(rows);
   } catch (err) { next(err); }
 });
@@ -373,6 +443,16 @@ router.post('/exercises', async (req, res, next) => {
        VALUES (?, ?, ?, ?)`,
       [name, muscle_group || null, equipment || null, description || null]
     );
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'exercise_created',
+      targetType: 'exercise',
+      targetId: r.insertId,
+      details: { name, muscle_group },
+      req,
+    });
+
     res.status(201).json({ id: r.insertId });
   } catch (err) { next(err); }
 });
@@ -391,6 +471,16 @@ router.patch('/exercises/:id', async (req, res, next) => {
 
     params.push(req.params.id);
     await pool.query(`UPDATE exercises SET ${fields.join(', ')} WHERE id = ?`, params);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'exercise_updated',
+      targetType: 'exercise',
+      targetId: Number(req.params.id),
+      details: { fields: Object.keys(req.body) },
+      req,
+    });
+
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
@@ -410,19 +500,27 @@ router.delete('/exercises/:id', async (req, res, next) => {
       });
 
     await pool.query('DELETE FROM exercises WHERE id = ?', [req.params.id]);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'exercise_deleted',
+      targetType: 'exercise',
+      targetId: Number(req.params.id),
+      req,
+    });
+
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
 /* ============================================================
-   PENDING PAYMENTS (verification queue)
+   PENDING PAYMENTS
    ============================================================ */
 
 router.get('/payments/pending', async (_req, res, next) => {
   try {
     const payments = await PaymentLog.find({ status: 'pending' })
-      .sort({ createdAt: -1 })
-      .lean();
+      .sort({ createdAt: -1 }).lean();
 
     const userIds = [...new Set(payments.map(p => p.userId))];
     let users = [];
@@ -451,9 +549,18 @@ router.patch('/payments/:id/verify', async (req, res, next) => {
     payment.verifiedAt = new Date();
     await payment.save();
 
+    // Activate membership
     if (payment.purpose === 'membership' && payment.referenceId) {
       await pool.query(
         `UPDATE memberships SET status='active' WHERE id=?`,
+        [payment.referenceId]
+      );
+    }
+
+    // Activate rental
+    if (payment.purpose === 'rental' && payment.referenceId) {
+      await pool.query(
+        `UPDATE rentals SET status='active' WHERE id=?`,
         [payment.referenceId]
       );
     }
@@ -473,6 +580,15 @@ router.patch('/payments/:id/verify', async (req, res, next) => {
       console.error('Result email failed:', e.message);
     }
 
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'payment_verified',
+      targetType: 'payment',
+      targetId: payment._id.toString(),
+      details: { reference: payment.reference, amount: payment.amount, method: payment.method },
+      req,
+    });
+
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
@@ -485,10 +601,31 @@ router.patch('/payments/:id/reject', async (req, res, next) => {
 
     payment.status = 'failed';
     payment.rejectedAt = new Date();
-    if (reason) {
-      payment.details = { ...(payment.details || {}), rejectionReason: reason };
-    }
+    if (reason) payment.details = { ...(payment.details || {}), rejectionReason: reason };
     await payment.save();
+
+    // Cancel membership if it's pending
+    if (payment.purpose === 'membership' && payment.referenceId) {
+      await pool.query(
+        `UPDATE memberships SET status='cancelled' WHERE id=? AND status='pending'`,
+        [payment.referenceId]
+      );
+    }
+
+    // Cancel rental if pending
+    if (payment.purpose === 'rental' && payment.referenceId) {
+      const [[rental]] = await pool.query(
+        'SELECT * FROM rentals WHERE id=? AND status IN (?,?)',
+        [payment.referenceId, 'reserved', 'hold']
+      );
+      if (rental) {
+        await pool.query(
+          'UPDATE rental_items SET stock = stock + ? WHERE id = ?',
+          [rental.quantity, rental.item_id]
+        );
+        await pool.query(`UPDATE rentals SET status='cancelled' WHERE id=?`, [rental.id]);
+      }
+    }
 
     try {
       const { sendPaymentResultEmail } = require('../services/mailer');
@@ -505,6 +642,15 @@ router.patch('/payments/:id/reject', async (req, res, next) => {
     } catch (e) {
       console.error('Result email failed:', e.message);
     }
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'payment_rejected',
+      targetType: 'payment',
+      targetId: payment._id.toString(),
+      details: { reference: payment.reference, amount: payment.amount, reason },
+      req,
+    });
 
     res.json({ ok: true });
   } catch (err) { next(err); }
@@ -546,12 +692,16 @@ router.post('/payments/:id/resend-email', async (req, res, next) => {
       itemName: payment.details?.items?.find(i => i.label === 'Item')?.value,
     });
 
-    res.json({
-      ok: true,
-      sentTo: rows[0].email,
-      additional: extras,
-      recipients,
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'payment_email_resent',
+      targetType: 'payment',
+      targetId: payment._id.toString(),
+      details: { reference: payment.reference, recipients },
+      req,
     });
+
+    res.json({ ok: true, sentTo: rows[0].email, additional: extras, recipients });
   } catch (err) {
     console.error('Admin resend failed:', err);
     res.status(500).json({ error: err.message || 'Send failed' });
@@ -559,10 +709,9 @@ router.post('/payments/:id/resend-email', async (req, res, next) => {
 });
 
 /* ============================================================
-   COACHES (admin management)
+   COACHES
    ============================================================ */
 
-/* GET /api/admin/coaches */
 router.get('/coaches', async (_req, res, next) => {
   try {
     const [rows] = await pool.query(
@@ -577,7 +726,6 @@ router.get('/coaches', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* GET /api/admin/coach-assignments */
 router.get('/coach-assignments', async (_req, res, next) => {
   try {
     const [rows] = await pool.query(
@@ -593,7 +741,6 @@ router.get('/coach-assignments', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* POST /api/admin/coach-assignments  { coachId, clientId } */
 router.post('/coach-assignments', async (req, res, next) => {
   try {
     const { coachId, clientId } = req.body;
@@ -619,14 +766,37 @@ router.post('/coach-assignments', async (req, res, next) => {
       [coachId, clientId]
     );
 
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'coach_assigned',
+      targetType: 'coach_client',
+      targetId: Number(coachId),
+      details: { coachId, clientId },
+      req,
+    });
+
     res.status(201).json({ ok: true });
   } catch (err) { next(err); }
 });
 
-/* DELETE /api/admin/coach-assignments/:id */
 router.delete('/coach-assignments/:id', async (req, res, next) => {
   try {
+    const [[assignment]] = await pool.query(
+      'SELECT coach_id, client_id FROM coach_clients WHERE id = ?', [req.params.id]
+    );
     await pool.query('DELETE FROM coach_clients WHERE id = ?', [req.params.id]);
+
+    if (assignment) {
+      await logAdminAction({
+        adminId: req.user.id,
+        action: 'coach_unassigned',
+        targetType: 'coach_client',
+        targetId: Number(req.params.id),
+        details: assignment,
+        req,
+      });
+    }
+
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
