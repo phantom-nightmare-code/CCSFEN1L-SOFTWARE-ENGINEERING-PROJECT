@@ -194,94 +194,56 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 ## 📁 Folder Structure
 
 FitForge/
-├── .env # Environment variables (not committed)
-├── .env.example # Template for .env
+├── .env                       # Environment variables (not committed)
+├── .env.example               # Template for .env
 ├── .gitignore
-├── package.json # Backend dependencies & scripts
-├── server.js # Express entry point
+├── package.json               # Backend dependencies & scripts
+├── server.js                  # Express entry point
 │
 ├── db/
-│ ├── mysql.js # MySQL connection pool
-│ ├── mongo.js # MongoDB connection (Mongoose)
-│ └── migrations/ # SQL schema migration files
+│   ├── mysql.js               # MySQL connection pool
+│   ├── mongo.js               # MongoDB connection (Mongoose)
+│   └── migrations/            # SQL schema migration files
 │
 ├── middleware/
-│ └── auth.js # JWT verification middleware
+│   └── auth.js                # JWT verification middleware
 │
 ├── models/
-│ └── mongo/ # Mongoose schemas
-│ ├── ActivityLog.js
-│ ├── PaymentLog.js
-│ └── AdminMetric.js
+│   └── mongo/                 # Mongoose schemas (ActivityLog, PaymentLog, AdminMetric)
 │
 ├── services/
-│ ├── activityLogger.js # Logs user actions to MongoDB
-│ ├── auditLogger.js # Logs admin actions to MySQL
-│ ├── prDetection.js # Epley 1RM computation + PR updates
-│ ├── recommendation.js # Recommends exercises for neglected muscle groups
-│ └── mailer.js # Gmail SMTP email sending
+│   ├── activityLogger.js      # Logs user actions to MongoDB
+│   ├── prDetection.js         # Epley 1RM computation + PR updates
+│   ├── recommendation.js      # Recommends exercises for neglected muscle groups
+│   └── mailer.js              # Gmail SMTP email sending
 │
-├── routes/ # All API endpoints
-│ ├── auth.js
-│ ├── admin.js
-│ ├── coaches.js
-│ ├── myCoach.js
-│ ├── memberships.js
-│ ├── payments.js
-│ ├── rentals.js
-│ ├── recommendations.js
-│ ├── routines.js
-│ ├── workouts.js
-│ ├── analytics.js
-│ └── exercises.js
+├── routes/                    # All API endpoints
+│   ├── auth.js
+│   ├── admin.js
+│   ├── coaches.js
+│   ├── myCoach.js
+│   ├── memberships.js
+│   ├── payments.js
+│   ├── rentals.js
+│   ├── recommendations.js
+│   ├── routines.js
+│   ├── workouts.js
+│   ├── analytics.js
+│   └── exercises.js
 │
-└── client/ # React frontend
-├── package.json
-├── vite.config.js
-├── netlify.toml
-├── index.html
-├── public/
-│ └── logo.png
-└── src/
-├── api.js
-├── App.jsx
-├── context/ # Auth, Theme, Toast providers
-│ ├── AuthContext.jsx
-│ ├── ThemeContext.jsx
-│ └── ToastContext.jsx
-├── components/ # Reusable UI
-│ ├── Navbar.jsx
-│ ├── Receipt.jsx
-│ ├── QRModal.jsx
-│ ├── ProtectedRoute.jsx
-│ ├── Card.jsx
-│ └── admin/
-│ ├── AuditLog.jsx
-│ ├── RemoveUserModal.jsx
-│ ├── RentalInventory.jsx
-│ ├── ExerciseLibrary.jsx
-│ ├── RevenueChart.jsx
-│ ├── UserDetailModal.jsx
-│ └── CoachManagement.jsx
-└── pages/ # Route components
-├── Home.jsx
-├── Login.jsx
-├── Register.jsx
-├── Profile.jsx
-├── Admin.jsx
-├── Membership.jsx
-├── Rentals.jsx
-├── Recommendations.jsx
-├── Workouts.jsx
-├── Routines.jsx
-├── Analytics.jsx
-├── Exercises.jsx
-├── VerifyPayment.jsx
-├── MyCoach.jsx
-├── Coach.jsx
-└── CoachClient.jsx
-
-
+└── client/                    # React frontend
+    ├── package.json
+    ├── vite.config.js
+    ├── netlify.toml
+    ├── index.html
+    ├── public/
+    │   └── logo.png
+    └── src/
+        ├── api.js
+        ├── App.jsx
+        ├── context/           # Auth, Theme, Toast providers
+        ├── components/        # Navbar, Receipt, QRModal, etc.
+        └── pages/             # Route components
 ---
 
 ## 🚀 Getting Started (Local Development)
