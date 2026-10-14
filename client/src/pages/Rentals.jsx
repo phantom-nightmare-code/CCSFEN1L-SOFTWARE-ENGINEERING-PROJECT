@@ -37,6 +37,7 @@ export default function Rentals() {
 
       const { data: rental } = await api.post('/rentals', {
         item_id: item.id, quantity: 1, start_time: start, end_time: end,
+        paymentMethod: method,
       });
 
       const methodDetails =
@@ -148,8 +149,16 @@ export default function Rentals() {
           )}
           {mine.map(r => (
             <div key={r.id} className="p-4 flex justify-between items-center text-sm">
-              <span><b>{r.item_name}</b> × {r.quantity} — {r.status} — ₱{r.total_cost}</span>
-              {r.status !== 'returned' && r.status !== 'cancelled' && (
+              <span>
+                <b>{r.item_name}</b> × {r.quantity} —{' '}
+                <span className={
+                  r.status === 'pending' || r.status === 'reserved' ? 'text-yellow-600'
+                  : r.status === 'active' ? 'text-green-600'
+                  : r.status === 'cancelled' ? 'text-red-600'
+                  : ''
+                }>{r.status}</span> — ₱{r.total_cost}
+              </span>
+              {r.status === 'active' && (
                 <button
                   onClick={() => returnItem(r.id)}
                   className="text-xs text-brand-600 hover:underline"
