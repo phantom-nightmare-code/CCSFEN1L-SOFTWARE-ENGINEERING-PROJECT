@@ -37,7 +37,6 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  // Registration no longer logs the user in — it returns the raw response
   const register = async (payload) => {
     const { data } = await api.post('/auth/register', payload);
     return data;
