@@ -37,9 +37,7 @@ export function AuthProvider({ children }) {
     return data.user;
   };
 
-  // Registration no longer logs the user in.
-  // It returns the raw response so the caller can show
-  // the "check your email" screen.
+  // Registration no longer logs the user in — it returns the raw response
   const register = async (payload) => {
     const { data } = await api.post('/auth/register', payload);
     return data;
