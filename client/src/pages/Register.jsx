@@ -13,6 +13,13 @@ export default function Register() {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const today = new Date().toISOString().slice(0, 10);
+  const minBirthday = (() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - 120);
+    return d.toISOString().slice(0, 10);
+  })();
+
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
   const onSubmit = async (e) => {
@@ -57,8 +64,11 @@ export default function Register() {
         <div>
           <label className="text-xs text-gray-500 block mb-1">Birthday (optional)</label>
           <input name="birthday" type="date"
+            min={minBirthday}
+            max={today}
             value={form.birthday} onChange={onChange}
             className="w-full border rounded px-3 py-2 dark:bg-gray-800 dark:border-gray-700" />
+          <p className="text-xs text-gray-400 mt-1">Must be at least 13 years old.</p>
         </div>
 
         <input name="password" type="password" required minLength={6}
