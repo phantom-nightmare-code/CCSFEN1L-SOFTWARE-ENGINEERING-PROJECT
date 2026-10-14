@@ -106,7 +106,6 @@ async function sendPaymentVerificationEmail({
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
       <h2 style="text-align: center; color: #2563eb; margin-top: 0;">FitForge Payment Verification</h2>
-      <p style="color:#333;">Hi,</p>
       <p style="color:#333;">Your payment is pending confirmation. Scan the QR code below (or click the button) to view the payment details and confirm.</p>
 
       <div style="text-align: center; margin: 20px 0;">
