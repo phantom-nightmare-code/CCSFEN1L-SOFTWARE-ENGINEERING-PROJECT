@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db/mysql');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { logActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
@@ -10,9 +11,11 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     await conn.beginTransaction();
 
-    const { type, start_date } = req.body;
+    const { type, start_date, paymentMethod } = req.body;
     if (!['walk-in', 'monthly', 'yearly'].includes(type))
       throw Object.assign(new Error('Invalid membership type'), { status: 400 });
+
+    const needsVerification = ['gcash', 'maya', 'bank'].includes(paymentMethod);
 
     const start = new Date(start_date || Date.now());
     const end = new Date(start);
@@ -20,24 +23,38 @@ router.post('/', authenticate, async (req, res, next) => {
     if (type === 'monthly') end.setMonth(end.getMonth() + 1);
     if (type === 'yearly')  end.setFullYear(end.getFullYear() + 1);
 
-    // cancel active ones
+    // Cancel any existing active membership
     await conn.query(
       `UPDATE memberships SET status='cancelled'
        WHERE user_id=? AND status='active'`,
       [req.user.id]
     );
 
+    // Pending until payment verified for digital methods
+    const initialStatus = needsVerification ? 'pending' : 'active';
+
     const [r] = await conn.query(
       `INSERT INTO memberships (user_id, type, start_date, end_date, status)
-       VALUES (?, ?, ?, ?, 'active')`,
+       VALUES (?, ?, ?, ?, ?)`,
       [req.user.id, type,
        start.toISOString().slice(0, 10),
-       end.toISOString().slice(0, 10)]
+       end.toISOString().slice(0, 10),
+       initialStatus]
     );
 
     await conn.commit();
+
+    await logActivity({
+      userId: req.user.id,
+      action: 'membership_created',
+      req,
+      metadata: { type, status: initialStatus, paymentMethod },
+    });
+
     res.status(201).json({
-      id: r.insertId, type,
+      id: r.insertId,
+      type,
+      status: initialStatus,
       start_date: start.toISOString().slice(0, 10),
       end_date:   end.toISOString().slice(0, 10),
     });
