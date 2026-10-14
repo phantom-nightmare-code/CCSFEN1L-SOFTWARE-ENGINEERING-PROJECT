@@ -72,8 +72,7 @@ export default function Login() {
               📬 Verify your email first
             </p>
             <p className="text-yellow-700 dark:text-yellow-300 text-xs">
-              We sent a verification link to <b>{form.email}</b>.
-              Click it to activate your account.
+              We sent a verification link to <b>{form.email}</b>. Click it to activate your account.
             </p>
             <p className="text-yellow-700 dark:text-yellow-300 text-xs">
               Check your Spam folder if you don't see it.
