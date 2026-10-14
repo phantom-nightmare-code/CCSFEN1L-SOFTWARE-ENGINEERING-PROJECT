@@ -4,11 +4,13 @@ import api from '../../api';
 export default function AuditLog() {
   const [logs, setLogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
 
   useEffect(() => {
     api.get('/admin/audit-log?limit=200')
-      .then(r => setLogs(r.data))
+      .then(r => setLogs(r.data || []))
+      .catch(e => setError(e.response?.data?.error || 'Failed to load audit log'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -19,6 +21,7 @@ export default function AuditLog() {
   );
 
   if (loading) return <div className="p-4 text-gray-500">Loading audit log…</div>;
+  if (error) return <div className="p-4 text-red-500">{error}</div>;
 
   return (
     <div className="space-y-4">
@@ -47,7 +50,11 @@ export default function AuditLog() {
           </thead>
           <tbody>
             {filtered.length === 0 && (
-              <tr><td colSpan={5} className="p-4 text-gray-500">No audit entries yet.</td></tr>
+              <tr>
+                <td colSpan={5} className="p-4 text-gray-500">
+                  No audit entries yet. Perform an admin action (like changing a user's role) to see entries here.
+                </td>
+              </tr>
             )}
             {filtered.map(l => (
               <tr key={l.id} className="border-b border-gray-100 dark:border-gray-800">
