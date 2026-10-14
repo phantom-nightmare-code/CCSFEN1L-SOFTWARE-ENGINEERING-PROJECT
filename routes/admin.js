@@ -51,6 +51,61 @@ router.patch('/users/:id/role', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/* DELETE /api/admin/users/:id — remove user with reason */
+router.delete('/users/:id', async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+    const { reason } = req.body;
+
+    if (userId === req.user.id)
+      return res.status(400).json({ error: 'You cannot delete your own account' });
+
+    if (!reason || reason.trim().length < 5)
+      return res.status(400).json({ error: 'Please provide a reason (min 5 characters)' });
+
+    const [[user]] = await pool.query(
+      'SELECT id, email, username, full_name, role, created_at FROM users WHERE id = ?',
+      [userId]
+    );
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (user.role === 'admin')
+      return res.status(400).json({ error: 'Cannot delete another admin. Demote first.' });
+
+    if (user.role === 'coach') {
+      const [[{ activeClients }]] = await pool.query(
+        `SELECT COUNT(*) AS activeClients FROM coach_clients
+         WHERE coach_id = ? AND status = 'active'`,
+        [userId]
+      );
+      if (activeClients > 0)
+        return res.status(400).json({
+          error: `Cannot remove — coach has ${activeClients} active client(s). Reassign first.`,
+        });
+    }
+
+    await pool.query('DELETE FROM users WHERE id = ?', [userId]);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'user_removed',
+      targetType: 'user',
+      targetId: userId,
+      details: {
+        removedUser: {
+          email: user.email,
+          username: user.username,
+          role: user.role,
+        },
+        reason: reason.trim(),
+      },
+      req,
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 router.get('/users/:id/details', async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
