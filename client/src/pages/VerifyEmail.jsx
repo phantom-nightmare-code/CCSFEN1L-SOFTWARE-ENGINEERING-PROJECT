@@ -47,7 +47,6 @@ export default function VerifyEmail() {
   return (
     <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center p-6">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-lg max-w-md w-full p-8 border border-gray-100 dark:border-gray-800">
-
         {status === 'loading' && (
           <div className="text-center space-y-4">
             <div className="text-5xl animate-pulse">⏳</div>
@@ -64,9 +63,7 @@ export default function VerifyEmail() {
                 <span className="font-medium">{email}</span> is now confirmed.
               </p>
             )}
-            <p className="text-sm text-gray-500">
-              You can now log in and start using FitForge.
-            </p>
+            <p className="text-sm text-gray-500">You can now log in and start using FitForge.</p>
             <Link
               to="/login"
               className="inline-block w-full bg-brand-600 text-white py-2.5 rounded-lg hover:bg-brand-700 font-medium"
@@ -110,10 +107,7 @@ export default function VerifyEmail() {
               </p>
             )}
 
-            <Link
-              to="/login"
-              className="block text-sm text-brand-600 hover:underline pt-2"
-            >
+            <Link to="/login" className="block text-sm text-brand-600 hover:underline pt-2">
               Back to login
             </Link>
           </div>
