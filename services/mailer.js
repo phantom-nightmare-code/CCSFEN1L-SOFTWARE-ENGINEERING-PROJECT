@@ -38,6 +38,10 @@ async function sendViaBrevo({ to, subject, html, cc }) {
     to: recipients,
     subject,
     htmlContent: html,
+    // Disable Brevo's link tracking — its tracking subdomain
+    // is unreliable and breaks verification links
+    trackClicks: false,
+    trackOpens: false,
   };
 
   if (cc && cc.length) {
