@@ -11,6 +11,7 @@ import RevenueChart from '../components/admin/RevenueChart';
 import UserDetailModal from '../components/admin/UserDetailModal';
 import CoachManagement from '../components/admin/CoachManagement';
 import AuditLog from '../components/admin/AuditLog';
+import RemoveUserModal from '../components/admin/RemoveUserModal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -30,6 +31,7 @@ export default function Admin() {
   const [filterUser, setFilterUser] = useState('');
   const [receipt, setReceipt] = useState(null);
   const [detailUser, setDetailUser] = useState(null);
+  const [removeUser, setRemoveUser] = useState(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -373,13 +375,21 @@ export default function Admin() {
                     </select>
                   </td>
                   <td>{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
-                  <td className="text-right pr-3">
+                  <td className="text-right pr-3 whitespace-nowrap">
                     <button
                       onClick={() => setDetailUser(u.id)}
-                      className="text-xs text-brand-600 hover:underline"
+                      className="text-xs text-brand-600 hover:underline mr-3"
                     >
                       View
                     </button>
+                    {u.id !== me?.id && u.role !== 'admin' && (
+                      <button
+                        onClick={() => setRemoveUser(u)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -748,6 +758,17 @@ export default function Admin() {
       {receipt && <Receipt data={receipt} onClose={() => setReceipt(null)} />}
       {detailUser && (
         <UserDetailModal userId={detailUser} onClose={() => setDetailUser(null)} />
+      )}
+
+      {removeUser && (
+        <RemoveUserModal
+          user={removeUser}
+          onClose={() => setRemoveUser(null)}
+          onRemoved={() => {
+            setUsers(list => list.filter(x => x.id !== removeUser.id));
+            setRemoveUser(null);
+          }}
+        />
       )}
     </div>
   );
