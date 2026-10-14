@@ -26,17 +26,12 @@ router.get('/stats/aggregate', async (_req, res, next) => {
       .reduce((s, p) => s + Number(p.amount || 0), 0);
 
     const totalTransactions = payments.length;
+    const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
 
     const [[{ activeRentals }]] = await pool.query(
       `SELECT COUNT(*) AS activeRentals FROM rentals
        WHERE status IN ('active','reserved','confirmed','hold')`
     );
-
-    const [[{ pendingPayments }]] = await pool.query(
-      `SELECT 0 AS pendingPayments`  // placeholder (payments are in Mongo)
-    );
-
-    const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
 
     res.json({
       totalSpent,
@@ -325,6 +320,7 @@ router.patch('/memberships/:id/status', async (req, res, next) => {
 
     const dbStatus = status === 'cancelled_refund' ? 'cancelled' : status;
     let paymentsRefunded = 0;
+    let paymentsActivated = 0;
 
     await pool.query('UPDATE memberships SET status = ? WHERE id = ?', [dbStatus, id]);
 
@@ -335,11 +331,29 @@ router.patch('/memberships/:id/status', async (req, res, next) => {
       );
       paymentsRefunded = r.modifiedCount;
     } else if (status === 'active') {
-      const r = await PaymentLog.updateMany(
+      // Un-refund refunded payments
+      const r1 = await PaymentLog.updateMany(
         { purpose: 'membership', referenceId: id, status: 'refunded' },
         { $set: { status: 'paid' }, $unset: { refundedAt: '' } }
       );
-      paymentsRefunded = -r.modifiedCount;
+      // Flip pending/failed payments to paid
+      const r2 = await PaymentLog.updateMany(
+        {
+          purpose: 'membership',
+          referenceId: id,
+          status: { $in: ['pending', 'failed'] },
+        },
+        { $set: { status: 'paid', verifiedAt: new Date() } }
+      );
+      paymentsRefunded = -r1.modifiedCount;
+      paymentsActivated = r2.modifiedCount;
+    } else if (status === 'pending') {
+      // Revert paid payments back to pending
+      const r = await PaymentLog.updateMany(
+        { purpose: 'membership', referenceId: id, status: 'paid' },
+        { $set: { status: 'pending' }, $unset: { verifiedAt: '' } }
+      );
+      paymentsActivated = -r.modifiedCount;
     }
 
     await logAdminAction({
@@ -347,11 +361,16 @@ router.patch('/memberships/:id/status', async (req, res, next) => {
       action: 'membership_status_changed',
       targetType: 'membership',
       targetId: id,
-      details: { from: existing.status, to: dbStatus, userId: existing.user_id },
+      details: {
+        from: existing.status,
+        to: dbStatus,
+        userId: existing.user_id,
+        paymentsActivated,
+      },
       req,
     });
 
-    res.json({ ok: true, status, paymentsRefunded });
+    res.json({ ok: true, status, paymentsRefunded, paymentsActivated });
   } catch (err) { next(err); }
 });
 
@@ -411,12 +430,24 @@ router.patch('/rentals/:id/status', async (req, res, next) => {
     await conn.commit();
 
     let paymentsRefunded = 0;
+    let paymentsActivated = 0;
+
     if (status === 'cancelled') {
       const r = await PaymentLog.updateMany(
         { purpose: 'rental', referenceId: id, status: 'paid' },
         { $set: { status: 'refunded', refundedAt: new Date() } }
       );
       paymentsRefunded = r.modifiedCount;
+    } else if (status === 'active') {
+      const r = await PaymentLog.updateMany(
+        {
+          purpose: 'rental',
+          referenceId: id,
+          status: { $in: ['pending', 'failed'] },
+        },
+        { $set: { status: 'paid', verifiedAt: new Date() } }
+      );
+      paymentsActivated = r.modifiedCount;
     }
 
     await logAdminAction({
@@ -424,11 +455,11 @@ router.patch('/rentals/:id/status', async (req, res, next) => {
       action: 'rental_status_changed',
       targetType: 'rental',
       targetId: id,
-      details: { from: rental.status, to: status, itemId: rental.item_id },
+      details: { from: rental.status, to: status, itemId: rental.item_id, paymentsActivated },
       req,
     });
 
-    res.json({ ok: true, status, paymentsRefunded });
+    res.json({ ok: true, status, paymentsRefunded, paymentsActivated });
   } catch (err) {
     await conn.rollback();
     next(err);
