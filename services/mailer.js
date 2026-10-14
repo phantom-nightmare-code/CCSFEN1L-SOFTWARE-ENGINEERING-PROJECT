@@ -1,22 +1,17 @@
 const nodemailer = require('nodemailer');
-const dns = require('dns');
 
-dns.setDefaultResultOrder('ipv4first');
-
+// Brevo SMTP relay — works on Render where Gmail SMTP is blocked
 const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true,
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
   auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
+    user: process.env.BREVO_SMTP_USER,
+    pass: process.env.BREVO_SMTP_PASS,
   },
-  family: 4,
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 20000,
-  dnsTimeout: 5000,
-  tls: { rejectUnauthorized: false },
 });
 
 /* ---------- helpers ---------- */
@@ -40,18 +35,16 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
   if (!primary.length) throw new Error('No valid recipient');
 
   const name = fullName || 'there';
+  const from = process.env.EMAIL_FROM || `FitForge <${process.env.EMAIL_USER}>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
       <h2 style="text-align: center; color: #2563eb; margin-top: 0;">Welcome to FitForge 💪</h2>
       <p style="color:#333;">Hi ${name},</p>
-      <p style="color:#333;">
-        Thanks for signing up! Please confirm your email address to activate your account.
-      </p>
+      <p style="color:#333;">Thanks for signing up! Please confirm your email address to activate your account.</p>
 
       <p style="text-align: center; margin: 28px 0;">
-        <a href="${verifyUrl}"
-           style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
+        <a href="${verifyUrl}" style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
           Verify my email
         </a>
       </p>
@@ -74,23 +67,19 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
         <span style="word-break: break-all;">${verifyUrl}</span>
       </p>
       <p style="font-size: 12px; color: #888; text-align: center; margin-top: 24px;">
-        — The FitForge Team<br/>
-        <i>Your move, your progress.</i>
+        — The FitForge Team<br/><i>Your move, your progress.</i>
       </p>
     </div>
   `;
 
-  const opts = {
-    from: `"FitForge" <${process.env.EMAIL_USER}>`,
-    replyTo: process.env.EMAIL_USER,
-    to: primary,
-    subject: 'Verify your FitForge account 💪',
-    html,
-  };
-
   console.log('[mailer] Sending welcome email →', primary);
   try {
-    const info = await transporter.sendMail(opts);
+    const info = await transporter.sendMail({
+      from,
+      to: primary,
+      subject: 'Verify your FitForge account 💪',
+      html,
+    });
     console.log('[mailer] ✅ Welcome sent:', info.messageId, '→', info.accepted);
     return info;
   } catch (err) {
@@ -102,33 +91,23 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
 /* ---------- PAYMENT VERIFICATION EMAIL ---------- */
 
 async function sendPaymentVerificationEmail({
-  to,
-  additionalTo = [],
-  qrDataUrl,
-  reference,
-  amount,
-  method,
-  purpose,
-  itemName,
+  to, additionalTo = [], qrDataUrl, reference,
+  amount, method, purpose, itemName,
 }) {
   const primary = parseEmails(to);
   const extras = parseEmails(additionalTo);
   const recipients = [...new Set([...primary, ...extras])];
-
-  if (!recipients.length)
-    throw new Error('No valid recipient email addresses');
+  if (!recipients.length) throw new Error('No valid recipient email addresses');
 
   const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const verifyUrl = `${process.env.CLIENT_URL}/verify-payment/${reference}`;
+  const from = process.env.EMAIL_FROM || `FitForge <${process.env.EMAIL_USER}>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
       <h2 style="text-align: center; color: #2563eb; margin-top: 0;">FitForge Payment Verification</h2>
       <p style="color:#333;">Hi,</p>
-      <p style="color:#333;">
-        Your payment is pending confirmation. Scan the QR code below
-        (or click the button) to view the payment details and confirm.
-      </p>
+      <p style="color:#333;">Your payment is pending confirmation. Scan the QR code below (or click the button) to view the payment details and confirm.</p>
 
       <div style="text-align: center; margin: 20px 0;">
         <img src="${qrDataUrl}" alt="Payment QR Code" style="width: 220px; height: 220px; border-radius: 8px;" />
@@ -143,8 +122,7 @@ async function sendPaymentVerificationEmail({
       </table>
 
       <p style="text-align: center; margin: 24px 0;">
-        <a href="${verifyUrl}"
-           style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
+        <a href="${verifyUrl}" style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
           View &amp; Confirm Payment
         </a>
       </p>
@@ -160,8 +138,7 @@ async function sendPaymentVerificationEmail({
   `;
 
   const opts = {
-    from: `"FitForge" <${process.env.EMAIL_USER}>`,
-    replyTo: process.env.EMAIL_USER,
+    from,
     to: recipients,
     subject: `FitForge — Verify your payment (${reference})`,
     html,
@@ -171,7 +148,7 @@ async function sendPaymentVerificationEmail({
     opts.cc = adminCc;
   }
 
-  console.log('[mailer] Sending verification email →', recipients);
+  console.log('[mailer] Sending payment verification →', recipients);
   try {
     const info = await transporter.sendMail(opts);
     console.log('[mailer] ✅ Sent:', info.messageId, '→', info.accepted);
@@ -188,6 +165,7 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
 
   const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const ok = status === 'verified';
+  const from = process.env.EMAIL_FROM || `FitForge <${process.env.EMAIL_USER}>`;
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
@@ -205,8 +183,7 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
   `;
 
   const opts = {
-    from: `"FitForge" <${process.env.EMAIL_USER}>`,
-    replyTo: process.env.EMAIL_USER,
+    from,
     to: primary,
     subject: `FitForge — Payment ${ok ? 'verified' : 'rejected'} (${reference})`,
     html,
