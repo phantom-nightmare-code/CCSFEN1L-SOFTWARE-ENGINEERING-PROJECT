@@ -22,6 +22,7 @@ export default function Admin() {
   const [tab, setTab] = useState('profile');
   const [range, setRange] = useState(30);
   const [stats, setStats] = useState(null);
+  const [aggregate, setAggregate] = useState(null);
   const [users, setUsers] = useState([]);
   const [activity, setActivity] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -39,6 +40,7 @@ export default function Admin() {
   }, [range]);
 
   useEffect(() => {
+    api.get('/admin/stats/aggregate').then(r => setAggregate(r.data));
     api.get('/admin/users').then(r => setUsers(r.data));
     api.get('/admin/activity?limit=100').then(r => setActivity(r.data));
     api.get('/payments').then(r => setPayments(r.data));
@@ -72,9 +74,9 @@ export default function Admin() {
 
   const changeMembershipStatus = async (m, newStatus) => {
     const label =
-      newStatus === 'active'          ? 'Active'
-      : newStatus === 'cancelled'     ? 'Cancelled'
-      : newStatus === 'pending'       ? 'Pending'
+      newStatus === 'active'           ? 'Active'
+      : newStatus === 'cancelled'      ? 'Cancelled'
+      : newStatus === 'pending'        ? 'Pending'
       : 'Cancelled + Refund';
 
     if (newStatus !== 'active' && !confirm(`Set membership to "${label}" for ${displayName(m)}?`)) return;
@@ -85,7 +87,11 @@ export default function Admin() {
       setMemberships(list =>
         list.map(x =>
           x.id === m.id
-            ? { ...x, status: newStatus === 'cancelled_refund' ? 'cancelled' : newStatus }
+            ? {
+                ...x,
+                status: newStatus === 'cancelled_refund' ? 'cancelled' : newStatus,
+                has_refund: newStatus === 'cancelled_refund' ? true : x.has_refund,
+              }
             : x
         )
       );
@@ -95,6 +101,8 @@ export default function Admin() {
         : r < 0 ? `Membership → Active · ${Math.abs(r)} payment(s) restored`
         : `Membership → ${label}`
       );
+      // Refresh aggregate stats
+      api.get('/admin/stats/aggregate').then(res => setAggregate(res.data));
       api.get('/payments').then(res => setPayments(res.data));
     } catch (e) {
       showToast(e.response?.data?.error || 'Failed to update', 'error');
@@ -116,6 +124,7 @@ export default function Admin() {
       );
       const refunds = data.paymentsRefunded || 0;
       showToast(`Rental → ${label}${refunds ? ` · ${refunds} payment refunded` : ''}`);
+      api.get('/admin/stats/aggregate').then(res => setAggregate(res.data));
       if (refunds) api.get('/payments').then(res => setPayments(res.data));
     } catch (e) {
       showToast(e.response?.data?.error || 'Failed to update', 'error');
@@ -128,6 +137,7 @@ export default function Admin() {
       await api.patch(`/admin/payments/${p._id}/verify`);
       setPendingPayments(list => list.filter(x => x._id !== p._id));
       api.get('/payments').then(r => setPayments(r.data));
+      api.get('/admin/stats/aggregate').then(r => setAggregate(r.data));
       showToast('Payment verified & user notified.');
     } catch (e) {
       showToast(e.response?.data?.error || 'Verify failed', 'error');
@@ -141,6 +151,7 @@ export default function Admin() {
       await api.patch(`/admin/payments/${p._id}/reject`, { reason });
       setPendingPayments(list => list.filter(x => x._id !== p._id));
       api.get('/payments').then(r => setPayments(r.data));
+      api.get('/admin/stats/aggregate').then(r => setAggregate(r.data));
       showToast('Payment rejected & user notified.', 'info');
     } catch (e) {
       showToast(e.response?.data?.error || 'Reject failed', 'error');
@@ -239,8 +250,10 @@ export default function Admin() {
         ))}
       </div>
 
+      {/* ==================== PROFILE ==================== */}
       {tab === 'profile' && (
         <div className="space-y-6">
+          {/* Admin's own card */}
           <section className="bg-gradient-to-br from-brand-600 to-brand-700 text-white rounded-2xl shadow-lg p-6">
             <div className="flex items-center gap-5">
               <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-3xl font-bold">
@@ -258,6 +271,30 @@ export default function Admin() {
             </div>
           </section>
 
+          {/* AGGREGATE STATS — across all users */}
+          <section>
+            <h3 className="text-xl font-semibold mb-3">Platform-wide Statistics</h3>
+            <div className="grid md:grid-cols-4 gap-3">
+              <Card
+                label="Total Spent (all users)"
+                value={aggregate ? `₱${Number(aggregate.totalSpent).toFixed(2)}` : '…'}
+              />
+              <Card
+                label="Refunded (all users)"
+                value={aggregate ? `₱${Number(aggregate.totalRefunded).toFixed(2)}` : '…'}
+              />
+              <Card
+                label="Transactions (all users)"
+                value={aggregate ? aggregate.totalTransactions : '…'}
+              />
+              <Card
+                label="Active Rentals (all users)"
+                value={aggregate ? aggregate.activeRentals : '…'}
+              />
+            </div>
+          </section>
+
+          {/* Users grid */}
           <section>
             <h3 className="text-xl font-semibold mb-3">
               Users who used the website ({users.length})
@@ -299,6 +336,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ==================== STATS ==================== */}
       {tab === 'stats' && (
         <div className="space-y-8">
           {stats && (
@@ -335,6 +373,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ==================== USERS ==================== */}
       {tab === 'users' && (
         <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
           <table className="w-full text-sm">
@@ -398,6 +437,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ==================== ACTIVITY ==================== */}
       {tab === 'activity' && (
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
           {activity.length === 0 && (
@@ -427,6 +467,7 @@ export default function Admin() {
 
       {tab === 'audit' && <AuditLog />}
 
+      {/* ==================== PAYMENTS ==================== */}
       {tab === 'payments' && (
         <>
           <div className="grid md:grid-cols-4 gap-4">
@@ -499,6 +540,7 @@ export default function Admin() {
         </>
       )}
 
+      {/* ==================== PENDING ==================== */}
       {tab === 'pending' && (
         <div className="space-y-4">
           <div>
@@ -585,6 +627,7 @@ export default function Admin() {
         </div>
       )}
 
+      {/* ==================== TRANSACTIONS ==================== */}
       {tab === 'transactions' && (
         <div className="space-y-6">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 p-4 flex items-center gap-3 flex-wrap">
@@ -635,44 +678,53 @@ export default function Admin() {
                   {memberships.length === 0 && (
                     <tr><td colSpan={5} className="p-4 text-gray-500">No memberships.</td></tr>
                   )}
-                  {memberships.map(m => (
-                    <tr key={m.id} className="border-b border-gray-100 dark:border-gray-800">
-                      <td className="p-3">
-                        <button
-                          onClick={() => setDetailUser(m.user_id)}
-                          className="text-left hover:text-brand-600 hover:underline"
-                        >
-                          <div className="font-medium">{displayName(m)}</div>
-                          <div className="text-xs text-gray-500">{m.email}</div>
-                        </button>
-                      </td>
-                      <td className="capitalize">{m.type}</td>
-                      <td className="text-gray-500">
-                        {m.start_date?.slice(0,10)} → {m.end_date?.slice(0,10)}
-                      </td>
-                      <td>
-                        <span className={`px-2 py-0.5 rounded text-xs capitalize ${
-                          m.status === 'active'    ? 'bg-green-100 text-green-700'
-                          : m.status === 'pending'   ? 'bg-yellow-100 text-yellow-700'
-                          : m.status === 'cancelled' ? 'bg-red-100 text-red-700'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                        }`}>{m.status}</span>
-                      </td>
-                      <td className="pr-3">
-                        <select
-                          disabled={busy}
-                          value={m.status}
-                          onChange={e => changeMembershipStatus(m, e.target.value)}
-                          className="border rounded px-2 py-1 text-xs dark:bg-gray-800 dark:border-gray-700 disabled:opacity-40"
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="active">Active</option>
-                          <option value="cancelled">Cancelled</option>
-                          <option value="cancelled_refund">Cancelled + Refund</option>
-                        </select>
-                      </td>
-                    </tr>
-                  ))}
+                  {memberships.map(m => {
+                    // If cancelled AND has a refund, show "Cancelled + Refund" in the dropdown
+                    const dropdownValue =
+                      m.status === 'cancelled' && m.has_refund
+                        ? 'cancelled_refund'
+                        : m.status;
+                    return (
+                      <tr key={m.id} className="border-b border-gray-100 dark:border-gray-800">
+                        <td className="p-3">
+                          <button
+                            onClick={() => setDetailUser(m.user_id)}
+                            className="text-left hover:text-brand-600 hover:underline"
+                          >
+                            <div className="font-medium">{displayName(m)}</div>
+                            <div className="text-xs text-gray-500">{m.email}</div>
+                          </button>
+                        </td>
+                        <td className="capitalize">{m.type}</td>
+                        <td className="text-gray-500">
+                          {m.start_date?.slice(0,10)} → {m.end_date?.slice(0,10)}
+                        </td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded text-xs capitalize ${
+                            m.status === 'active'    ? 'bg-green-100 text-green-700'
+                            : m.status === 'pending'   ? 'bg-yellow-100 text-yellow-700'
+                            : m.status === 'cancelled' ? 'bg-red-100 text-red-700'
+                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                          }`}>
+                            {m.status === 'cancelled' && m.has_refund ? 'cancelled + refund' : m.status}
+                          </span>
+                        </td>
+                        <td className="pr-3">
+                          <select
+                            disabled={busy}
+                            value={dropdownValue}
+                            onChange={e => changeMembershipStatus(m, e.target.value)}
+                            className="border rounded px-2 py-1 text-xs dark:bg-gray-800 dark:border-gray-700 disabled:opacity-40"
+                          >
+                            <option value="pending">Pending</option>
+                            <option value="active">Active</option>
+                            <option value="cancelled">Cancelled</option>
+                            <option value="cancelled_refund">Cancelled + Refund</option>
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
