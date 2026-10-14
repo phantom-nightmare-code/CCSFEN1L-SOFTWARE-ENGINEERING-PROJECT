@@ -364,7 +364,8 @@ export default function Admin() {
                       value={u.role}
                       onChange={e => setRole(u.id, e.target.value)}
                       disabled={u.id === me?.id}
-                      className="border rounded px-2 py-1 text-xs dark:bg-gray-800 dark:border-gray-700 disabled:opacity-40"
+                      title={u.id === me?.id ? "You can't change your own role" : "Change role"}
+                      className="border rounded px-2 py-1 text-xs dark:bg-gray-800 dark:border-gray-700 disabled:opacity-40 cursor-pointer"
                     >
                       <option value="user">User</option>
                       <option value="coach">Coach</option>
