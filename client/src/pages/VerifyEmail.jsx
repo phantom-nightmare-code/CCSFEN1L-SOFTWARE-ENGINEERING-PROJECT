@@ -4,7 +4,7 @@ import api from '../api';
 
 export default function VerifyEmail() {
   const { token } = useParams();
-  const [status, setStatus] = useState('loading'); // loading | success | expired | invalid
+  const [status, setStatus] = useState('loading');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [resending, setResending] = useState(false);
