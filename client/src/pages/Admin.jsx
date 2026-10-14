@@ -10,6 +10,7 @@ import ExerciseLibrary from '../components/admin/ExerciseLibrary';
 import RevenueChart from '../components/admin/RevenueChart';
 import UserDetailModal from '../components/admin/UserDetailModal';
 import CoachManagement from '../components/admin/CoachManagement';
+import AuditLog from '../components/admin/AuditLog';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -71,19 +72,18 @@ export default function Admin() {
     const label =
       newStatus === 'active'          ? 'Active'
       : newStatus === 'cancelled'     ? 'Cancelled'
+      : newStatus === 'pending'       ? 'Pending'
       : 'Cancelled + Refund';
 
     if (newStatus !== 'active' && !confirm(`Set membership to "${label}" for ${displayName(m)}?`)) return;
 
     setBusy(true);
     try {
-      const { data } = await api.patch(`/admin/memberships/${m.id}/status`, {
-        status: newStatus,
-      });
+      const { data } = await api.patch(`/admin/memberships/${m.id}/status`, { status: newStatus });
       setMemberships(list =>
         list.map(x =>
           x.id === m.id
-            ? { ...x, status: newStatus === 'active' ? 'active' : 'cancelled' }
+            ? { ...x, status: newStatus === 'cancelled_refund' ? 'cancelled' : newStatus }
             : x
         )
       );
@@ -108,16 +108,12 @@ export default function Admin() {
 
     setBusy(true);
     try {
-      const { data } = await api.patch(`/admin/rentals/${r.id}/status`, {
-        status: newStatus,
-      });
+      const { data } = await api.patch(`/admin/rentals/${r.id}/status`, { status: newStatus });
       setRentals(list =>
         list.map(x => (x.id === r.id ? { ...x, status: newStatus } : x))
       );
       const refunds = data.paymentsRefunded || 0;
-      showToast(
-        `Rental → ${label}${refunds ? ` · ${refunds} payment refunded` : ''}`
-      );
+      showToast(`Rental → ${label}${refunds ? ` · ${refunds} payment refunded` : ''}`);
       if (refunds) api.get('/payments').then(res => setPayments(res.data));
     } catch (e) {
       showToast(e.response?.data?.error || 'Failed to update', 'error');
@@ -160,9 +156,7 @@ export default function Admin() {
       });
       const extras = (data.additional || []).join(', ');
       showToast(
-        extras
-          ? `Sent to ${data.sentTo} and ${extras}`
-          : `Re-sent to ${data.sentTo}`
+        extras ? `Sent to ${data.sentTo} and ${extras}` : `Re-sent to ${data.sentTo}`
       );
     } catch (e) {
       showToast(e.response?.data?.error || 'Resend failed', 'error');
@@ -201,6 +195,7 @@ export default function Admin() {
     { id: 'stats',        label: 'STATS' },
     { id: 'users',        label: 'USERS' },
     { id: 'activity',     label: 'ACTIVITY' },
+    { id: 'audit',        label: 'AUDIT LOG' },
     { id: 'payments',     label: 'PAYMENTS' },
     { id: 'pending',      label: `PENDING${pendingPayments.length ? ` (${pendingPayments.length})` : ''}` },
     { id: 'transactions', label: 'TRANSACTIONS' },
@@ -242,7 +237,6 @@ export default function Admin() {
         ))}
       </div>
 
-      {/* ==================== PROFILE ==================== */}
       {tab === 'profile' && (
         <div className="space-y-6">
           <section className="bg-gradient-to-br from-brand-600 to-brand-700 text-white rounded-2xl shadow-lg p-6">
@@ -281,9 +275,7 @@ export default function Admin() {
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold truncate">
                         {displayName(u)}
-                        {u.id === me?.id && (
-                          <span className="text-xs text-brand-600 ml-1">(you)</span>
-                        )}
+                        {u.id === me?.id && <span className="text-xs text-brand-600 ml-1">(you)</span>}
                       </div>
                       <div className="text-xs text-gray-500 truncate">{u.email}</div>
                       <div className="text-xs text-gray-400 mt-0.5">
@@ -293,11 +285,9 @@ export default function Admin() {
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-xs shrink-0 ${
-                      u.role === 'admin'
-                        ? 'bg-purple-100 text-purple-700'
-                        : u.role === 'coach'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                      u.role === 'admin' ? 'bg-purple-100 text-purple-700'
+                      : u.role === 'coach' ? 'bg-blue-100 text-blue-700'
+                      : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
                     }`}>{u.role}</span>
                   </button>
                 );
@@ -307,7 +297,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ==================== STATS ==================== */}
       {tab === 'stats' && (
         <div className="space-y-8">
           {stats && (
@@ -344,7 +333,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ==================== USERS ==================== */}
       {tab === 'users' && (
         <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
           <table className="w-full text-sm">
@@ -372,39 +360,25 @@ export default function Admin() {
                   </td>
                   <td className="text-gray-500">{u.email}</td>
                   <td>
-                    <span className={`px-2 py-0.5 rounded text-xs ${
-                      u.role === 'admin'
-                        ? 'bg-purple-100 text-purple-700'
-                        : u.role === 'coach'
-                          ? 'bg-blue-100 text-blue-700'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                    }`}>{u.role}</span>
+                    <select
+                      value={u.role}
+                      onChange={e => setRole(u.id, e.target.value)}
+                      disabled={u.id === me?.id}
+                      className="border rounded px-2 py-1 text-xs dark:bg-gray-800 dark:border-gray-700 disabled:opacity-40"
+                    >
+                      <option value="user">User</option>
+                      <option value="coach">Coach</option>
+                      <option value="admin">Admin</option>
+                    </select>
                   </td>
                   <td>{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
-                  <td className="text-right pr-3 space-x-3">
+                  <td className="text-right pr-3">
                     <button
                       onClick={() => setDetailUser(u.id)}
                       className="text-xs text-brand-600 hover:underline"
                     >
                       View
                     </button>
-                    {u.id !== me?.id && (
-                      u.role === 'user' ? (
-                        <button
-                          onClick={() => setRole(u.id, 'coach')}
-                          className="text-xs text-blue-600 hover:underline"
-                        >
-                          Make coach
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setRole(u.id, 'user')}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Reset to user
-                        </button>
-                      )
-                    )}
                   </td>
                 </tr>
               ))}
@@ -413,7 +387,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ==================== ACTIVITY ==================== */}
       {tab === 'activity' && (
         <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
           {activity.length === 0 && (
@@ -441,7 +414,8 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ==================== PAYMENTS ==================== */}
+      {tab === 'audit' && <AuditLog />}
+
       {tab === 'payments' && (
         <>
           <div className="grid md:grid-cols-4 gap-4">
@@ -514,7 +488,6 @@ export default function Admin() {
         </>
       )}
 
-      {/* ==================== PENDING PAYMENTS ==================== */}
       {tab === 'pending' && (
         <div className="space-y-4">
           <div>
@@ -577,7 +550,6 @@ export default function Admin() {
                       <button
                         onClick={() => adminResend(p)}
                         className="text-xs text-brand-600 hover:underline"
-                        title="Resend verification email"
                       >
                         📧 Resend
                       </button>
@@ -602,7 +574,6 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ==================== TRANSACTIONS ==================== */}
       {tab === 'transactions' && (
         <div className="space-y-6">
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 p-4 flex items-center gap-3 flex-wrap">
@@ -671,6 +642,7 @@ export default function Admin() {
                       <td>
                         <span className={`px-2 py-0.5 rounded text-xs capitalize ${
                           m.status === 'active'    ? 'bg-green-100 text-green-700'
+                          : m.status === 'pending'   ? 'bg-yellow-100 text-yellow-700'
                           : m.status === 'cancelled' ? 'bg-red-100 text-red-700'
                           : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
                         }`}>{m.status}</span>
@@ -678,10 +650,11 @@ export default function Admin() {
                       <td className="pr-3">
                         <select
                           disabled={busy}
-                          value={m.status === 'active' ? 'active' : 'cancelled'}
+                          value={m.status}
                           onChange={e => changeMembershipStatus(m, e.target.value)}
                           className="border rounded px-2 py-1 text-xs dark:bg-gray-800 dark:border-gray-700 disabled:opacity-40"
                         >
+                          <option value="pending">Pending</option>
                           <option value="active">Active</option>
                           <option value="cancelled">Cancelled</option>
                           <option value="cancelled_refund">Cancelled + Refund</option>
@@ -736,7 +709,7 @@ export default function Admin() {
                               ? 'bg-green-100 text-green-700'
                               : r.status === 'confirmed'
                                 ? 'bg-blue-100 text-blue-700'
-                                : r.status === 'hold'
+                                : r.status === 'hold' || r.status === 'reserved'
                                   ? 'bg-orange-100 text-orange-700'
                                   : r.status === 'cancelled'
                                     ? 'bg-red-100 text-red-700'
@@ -753,6 +726,7 @@ export default function Admin() {
                           <option value="reserved">Reserved</option>
                           <option value="confirmed">Confirmed</option>
                           <option value="hold">Hold</option>
+                          <option value="active">Active</option>
                           <option value="available">Available</option>
                           <option value="cancelled">Cancelled + Refund</option>
                         </select>
@@ -766,13 +740,8 @@ export default function Admin() {
         </div>
       )}
 
-      {/* ==================== COACHES ==================== */}
       {tab === 'coaches' && <CoachManagement />}
-
-      {/* ==================== INVENTORY ==================== */}
       {tab === 'inventory' && <RentalInventory />}
-
-      {/* ==================== EXERCISES ==================== */}
       {tab === 'exercises' && <ExerciseLibrary />}
 
       {receipt && <Receipt data={receipt} onClose={() => setReceipt(null)} />}
