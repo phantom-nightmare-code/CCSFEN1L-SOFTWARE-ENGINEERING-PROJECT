@@ -14,6 +14,28 @@ const signToken = (u) =>
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
+/* ---------- birthday validation helper ---------- */
+function validateBirthday(birthday) {
+  if (!birthday) return null;
+  const bd = new Date(birthday);
+  if (isNaN(bd)) return 'Invalid birthday format';
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (bd > today) return 'Birthday cannot be in the future';
+
+  const minAge = new Date();
+  minAge.setFullYear(minAge.getFullYear() - 120);
+  if (bd < minAge) return 'Please enter a valid birthday';
+
+  const youngest = new Date();
+  youngest.setFullYear(youngest.getFullYear() - 13);
+  if (bd > youngest) return 'You must be at least 13 years old to register';
+
+  return null;
+}
+
 /* ---------- POST /api/auth/register ---------- */
 router.post('/register', async (req, res, next) => {
   try {
@@ -22,6 +44,9 @@ router.post('/register', async (req, res, next) => {
       return res.status(400).json({ error: 'Email and password are required' });
     if (password.length < 6)
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    const bdErr = validateBirthday(birthday);
+    if (bdErr) return res.status(400).json({ error: bdErr });
 
     const [dup] = await pool.query('SELECT id FROM users WHERE email = ?', [email]);
     if (dup.length) return res.status(409).json({ error: 'Email already registered' });
@@ -96,7 +121,13 @@ router.patch('/me', authenticate, async (req, res, next) => {
 
     if (full_name !== undefined) { fields.push('full_name = ?'); params.push(full_name || null); }
     if (username  !== undefined) { fields.push('username = ?');  params.push(username); }
-    if (birthday  !== undefined) { fields.push('birthday = ?');  params.push(birthday || null); }
+
+    if (birthday !== undefined) {
+      const bdErr = validateBirthday(birthday);
+      if (bdErr) return res.status(400).json({ error: bdErr });
+      fields.push('birthday = ?');
+      params.push(birthday || null);
+    }
 
     if (!fields.length) return res.status(400).json({ error: 'No fields to update' });
 
