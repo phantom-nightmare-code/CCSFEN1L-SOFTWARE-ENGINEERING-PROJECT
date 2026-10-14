@@ -10,6 +10,45 @@ const router = express.Router();
 router.use(authenticate, requireAdmin);
 
 /* ============================================================
+   AGGREGATE STATS (across all users)
+   ============================================================ */
+
+router.get('/stats/aggregate', async (_req, res, next) => {
+  try {
+    const payments = await PaymentLog.find({}).lean();
+
+    const totalSpent = payments
+      .filter(p => p.status === 'paid')
+      .reduce((s, p) => s + Number(p.amount || 0), 0);
+
+    const totalRefunded = payments
+      .filter(p => p.status === 'refunded')
+      .reduce((s, p) => s + Number(p.amount || 0), 0);
+
+    const totalTransactions = payments.length;
+
+    const [[{ activeRentals }]] = await pool.query(
+      `SELECT COUNT(*) AS activeRentals FROM rentals
+       WHERE status IN ('active','reserved','confirmed','hold')`
+    );
+
+    const [[{ pendingPayments }]] = await pool.query(
+      `SELECT 0 AS pendingPayments`  // placeholder (payments are in Mongo)
+    );
+
+    const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
+
+    res.json({
+      totalSpent,
+      totalRefunded,
+      totalTransactions,
+      activeRentals,
+      pendingPayments: pendingPaymentsCount,
+    });
+  } catch (err) { next(err); }
+});
+
+/* ============================================================
    USERS
    ============================================================ */
 
@@ -51,7 +90,6 @@ router.patch('/users/:id/role', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* DELETE /api/admin/users/:id — remove user with reason */
 router.delete('/users/:id', async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
@@ -92,11 +130,7 @@ router.delete('/users/:id', async (req, res, next) => {
       targetType: 'user',
       targetId: userId,
       details: {
-        removedUser: {
-          email: user.email,
-          username: user.username,
-          role: user.role,
-        },
+        removedUser: { email: user.email, username: user.username, role: user.role },
         reason: reason.trim(),
       },
       req,
@@ -256,7 +290,23 @@ router.get('/memberships', async (req, res, next) => {
     if (userId) { sql += ' WHERE m.user_id = ?'; params.push(userId); }
     sql += ' ORDER BY m.created_at DESC LIMIT 500';
     const [rows] = await pool.query(sql, params);
-    res.json(rows);
+
+    // Determine which memberships have been refunded
+    const ids = rows.map(r => r.id);
+    let refundedSet = new Set();
+    if (ids.length) {
+      const refunded = await PaymentLog.find({
+        purpose: 'membership',
+        referenceId: { $in: ids },
+        status: 'refunded',
+      }).select('referenceId').lean();
+      refundedSet = new Set(refunded.map(r => r.referenceId));
+    }
+
+    res.json(rows.map(r => ({
+      ...r,
+      has_refund: refundedSet.has(r.id),
+    })));
   } catch (err) { next(err); }
 });
 
