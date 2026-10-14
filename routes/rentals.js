@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db/mysql');
 const { authenticate, requireAdmin } = require('../middleware/auth');
+const { logActivity } = require('../services/activityLogger');
 
 const router = express.Router();
 
@@ -20,9 +21,11 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     await conn.beginTransaction();
 
-    const { item_id, quantity = 1, start_time, end_time } = req.body;
+    const { item_id, quantity = 1, start_time, end_time, paymentMethod } = req.body;
     if (!item_id || !start_time || !end_time)
       throw Object.assign(new Error('item_id, start_time, end_time required'), { status: 400 });
+
+    const needsVerification = ['gcash', 'maya', 'bank'].includes(paymentMethod);
 
     const [[item]] = await conn.query(
       'SELECT * FROM rental_items WHERE id=? FOR UPDATE', [item_id]
@@ -36,20 +39,37 @@ router.post('/', authenticate, async (req, res, next) => {
     const hours = Math.max(1, Math.ceil((end - start) / 3_600_000));
     const total = Number(item.hourly_rate) * hours * quantity;
 
+    // 'reserved' = pending verification, 'active' = paid and confirmed
+    const initialStatus = needsVerification ? 'reserved' : 'active';
+
     const [r] = await conn.query(
       `INSERT INTO rentals
         (user_id, item_id, quantity, start_time, end_time, status, total_cost)
-       VALUES (?, ?, ?, ?, ?, 'reserved', ?)`,
-      [req.user.id, item_id, quantity, start, end, total]
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, item_id, quantity, start, end, initialStatus, total]
     );
 
+    // Reserve stock in both cases
     await conn.query(
       'UPDATE rental_items SET stock = stock - ? WHERE id = ?',
       [quantity, item_id]
     );
 
     await conn.commit();
-    res.status(201).json({ id: r.insertId, total_cost: total, hours });
+
+    await logActivity({
+      userId: req.user.id,
+      action: 'rental_created',
+      req,
+      metadata: { item: item.name, status: initialStatus, paymentMethod },
+    });
+
+    res.status(201).json({
+      id: r.insertId,
+      total_cost: total,
+      hours,
+      status: initialStatus,
+    });
   } catch (err) {
     await conn.rollback();
     next(err);
