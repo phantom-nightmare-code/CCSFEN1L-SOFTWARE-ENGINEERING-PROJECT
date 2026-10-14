@@ -12,7 +12,7 @@
 
 FitForge is a full-stack gym management and workout tracking platform that brings together workout logging, routine building, analytics, membership management, equipment rentals, and personal coaching into a single, modern web application.
 
-**🔗 Live Demo:** https://fitforge-gym-and-track.netlify.app
+**🔗 Live Demo:** (https://fitforge-gym-and-track.pages.dev/)
 
 [![Live Demo](https://img.shields.io/badge/Live_Demo-00C7B7?style=for-the-badge&logo=netlify&logoColor=white)](https://fitforge-gym-and-track.netlify.app)
 [![Backend API](https://img.shields.io/badge/Backend_API-4A90E2?style=for-the-badge&logo=render&logoColor=white)](https://fitforge-backend-wey2.onrender.com)
