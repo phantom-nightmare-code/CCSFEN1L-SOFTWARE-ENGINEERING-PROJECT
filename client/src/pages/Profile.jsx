@@ -42,6 +42,8 @@ export default function Profile() {
   const [form, setForm] = useState({ full_name: '', username: '', birthday: '' });
   const [saving, setSaving] = useState(false);
 
+  const isAdmin = user?.role === 'admin';
+
   const load = () => {
     return Promise.all([
       api.get('/memberships/me').catch(() => ({ data: [] })),
@@ -75,8 +77,12 @@ export default function Profile() {
 
   const paidPayments     = payments.filter(p => p.status === 'paid');
   const refundedPayments = payments.filter(p => p.status === 'refunded');
-  const totalSpent       = paidPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
-  const refundedTotal    = refundedPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+
+  // Admin accounts don't show personal stats — they manage other users
+  const totalSpent    = isAdmin ? 0 : paidPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const refundedTotal = isAdmin ? 0 : refundedPayments.reduce((s, p) => s + Number(p.amount || 0), 0);
+  const txCount       = isAdmin ? 0 : payments.length;
+  const activeRentalCount = isAdmin ? 0 : activeRentals.length;
 
   const openReceipt = (p) => {
     setSelected({
@@ -174,7 +180,7 @@ export default function Profile() {
               {age !== null && (
                 <span className="px-2 py-0.5 rounded bg-white/20">{age} years old</span>
               )}
-              {activeMembership && (
+              {!isAdmin && activeMembership && (
                 <span className={`px-2 py-0.5 rounded font-semibold ${
                   expired ? 'bg-red-400 text-red-900'
                   : expiringSoon ? 'bg-orange-400 text-orange-900'
@@ -190,8 +196,8 @@ export default function Profile() {
         </div>
       </section>
 
-      {/* Active membership banner */}
-      {activeMembership && (
+      {/* Active membership banner — only for non-admins */}
+      {!isAdmin && activeMembership && (
         <section className={`rounded-2xl shadow border p-5 ${
           expired
             ? 'bg-red-50 dark:bg-red-950/30 border-red-200 dark:border-red-900'
@@ -234,27 +240,36 @@ export default function Profile() {
         </section>
       )}
 
+      {/* Admin note */}
+      {isAdmin && (
+        <section className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900 rounded-xl p-4 text-sm">
+          <p className="text-yellow-800 dark:text-yellow-200">
+            <b>⭐ Administrator Account</b> — personal transaction stats are hidden. To manage users, payments, memberships, and rentals, open the <a href="/admin" className="underline font-medium">Admin Dashboard</a>.
+          </p>
+        </section>
+      )}
+
       {/* Summary cards */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <SummaryCard
           label="Total Spent"
           value={`₱${totalSpent.toFixed(2)}`}
-          accent="text-green-600"
+          accent={isAdmin ? '' : 'text-green-600'}
         />
         <SummaryCard
           label="Refunded"
           value={`₱${refundedTotal.toFixed(2)}`}
-          accent={refundedTotal > 0 ? 'text-red-600' : ''}
+          accent={!isAdmin && refundedTotal > 0 ? 'text-red-600' : ''}
         />
         <SummaryCard
           label="Transactions"
-          value={payments.length}
-          accent="text-brand-600"
+          value={txCount}
+          accent={isAdmin ? '' : 'text-brand-600'}
         />
         <SummaryCard
           label="Active Rentals"
-          value={activeRentals.length}
-          accent="text-yellow-600"
+          value={activeRentalCount}
+          accent={isAdmin ? '' : 'text-yellow-600'}
         />
       </section>
 
@@ -373,7 +388,11 @@ export default function Profile() {
           </Panel>
 
           <Panel title="Membership Status">
-            {activeMembership ? (
+            {isAdmin ? (
+              <p className="text-sm text-gray-500">
+                Admin accounts don't have personal memberships.
+              </p>
+            ) : activeMembership ? (
               <>
                 <DetailRow label="Plan"
                   value={<span className="capitalize font-medium">{activeMembership.type}</span>} />
@@ -409,31 +428,33 @@ export default function Profile() {
                 </a>
               </p>
             )}
-            <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-800">
-              <DetailRow
-                label="Active rentals"
-                value={
-                  activeRentals.length === 0
-                    ? <span className="text-gray-500">None</span>
-                    : <span className="text-yellow-600 font-medium">
-                        {activeRentals.length} item{activeRentals.length > 1 ? 's' : ''}
-                      </span>
-                }
-              />
-              <DetailRow
-                label="Latest payment"
-                value={
-                  payments[0]
-                    ? <button
-                        onClick={() => openReceipt(payments[0])}
-                        className="text-brand-600 hover:underline"
-                      >
-                        ₱{Number(payments[0].amount).toFixed(2)} · {payments[0].method}
-                      </button>
-                    : <span className="text-gray-500">None</span>
-                }
-              />
-            </div>
+            {!isAdmin && (
+              <div className="pt-3 mt-3 border-t border-gray-100 dark:border-gray-800">
+                <DetailRow
+                  label="Active rentals"
+                  value={
+                    activeRentals.length === 0
+                      ? <span className="text-gray-500">None</span>
+                      : <span className="text-yellow-600 font-medium">
+                          {activeRentals.length} item{activeRentals.length > 1 ? 's' : ''}
+                        </span>
+                  }
+                />
+                <DetailRow
+                  label="Latest payment"
+                  value={
+                    payments[0]
+                      ? <button
+                          onClick={() => openReceipt(payments[0])}
+                          className="text-brand-600 hover:underline"
+                        >
+                          ₱{Number(payments[0].amount).toFixed(2)} · {payments[0].method}
+                        </button>
+                      : <span className="text-gray-500">None</span>
+                  }
+                />
+              </div>
+            )}
           </Panel>
         </div>
       )}
@@ -442,7 +463,9 @@ export default function Profile() {
       {tab === 'transactions' && (
         <section>
           <p className="text-xs text-gray-500 mb-2">
-            Click any row to view its receipt. Pending payments have a Resend option.
+            {isAdmin
+              ? 'Your personal transaction history (from testing the app).'
+              : 'Click any row to view its receipt. Pending payments have a Resend option.'}
           </p>
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow divide-y divide-gray-100 dark:divide-gray-800 border border-gray-100 dark:border-gray-800">
             {payments.length === 0 && <Empty text="No transactions yet." />}
