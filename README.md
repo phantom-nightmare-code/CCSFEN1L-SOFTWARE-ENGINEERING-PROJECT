@@ -283,7 +283,7 @@ FitForge/
             └── CoachClient.jsx
 ```
 ---
-
+```bash
 ## 🚀 Getting Started (Local Development)
 
 ### Prerequisites
