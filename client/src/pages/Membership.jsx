@@ -35,7 +35,11 @@ export default function Membership() {
     const plan = PLANS.find(p => p.type === type);
     setBusy(type);
     try {
-      const { data: m } = await api.post('/memberships', { type, start_date: new Date() });
+      const { data: m } = await api.post('/memberships', {
+        type,
+        start_date: new Date(),
+        paymentMethod: method,
+      });
 
       const methodDetails =
         method === 'gcash' ? { mobile: '0917XXXXXXX' }
@@ -130,7 +134,14 @@ export default function Membership() {
           )}
           {mine.map(m => (
             <div key={m.id} className="p-4 flex justify-between text-sm">
-              <span><b className="capitalize">{m.type}</b> — {m.status}</span>
+              <span>
+                <b className="capitalize">{m.type}</b> —{' '}
+                <span className={
+                  m.status === 'pending' ? 'text-yellow-600'
+                  : m.status === 'active' ? 'text-green-600'
+                  : 'text-red-600'
+                }>{m.status}</span>
+              </span>
               <span className="text-gray-500">
                 {m.start_date?.slice(0, 10)} → {m.end_date?.slice(0, 10)}
               </span>
