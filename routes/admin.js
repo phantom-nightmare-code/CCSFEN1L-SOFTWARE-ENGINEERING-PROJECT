@@ -549,7 +549,6 @@ router.patch('/payments/:id/verify', async (req, res, next) => {
     payment.verifiedAt = new Date();
     await payment.save();
 
-    // Activate membership
     if (payment.purpose === 'membership' && payment.referenceId) {
       await pool.query(
         `UPDATE memberships SET status='active' WHERE id=?`,
@@ -557,7 +556,6 @@ router.patch('/payments/:id/verify', async (req, res, next) => {
       );
     }
 
-    // Activate rental
     if (payment.purpose === 'rental' && payment.referenceId) {
       await pool.query(
         `UPDATE rentals SET status='active' WHERE id=?`,
@@ -604,7 +602,6 @@ router.patch('/payments/:id/reject', async (req, res, next) => {
     if (reason) payment.details = { ...(payment.details || {}), rejectionReason: reason };
     await payment.save();
 
-    // Cancel membership if it's pending
     if (payment.purpose === 'membership' && payment.referenceId) {
       await pool.query(
         `UPDATE memberships SET status='cancelled' WHERE id=? AND status='pending'`,
@@ -612,7 +609,6 @@ router.patch('/payments/:id/reject', async (req, res, next) => {
       );
     }
 
-    // Cancel rental if pending
     if (payment.purpose === 'rental' && payment.referenceId) {
       const [[rental]] = await pool.query(
         'SELECT * FROM rentals WHERE id=? AND status IN (?,?)',
