@@ -1,7 +1,6 @@
 const nodemailer = require('nodemailer');
 const dns = require('dns');
 
-// Force IPv4 DNS resolution — Render's free tier doesn't support IPv6
 dns.setDefaultResultOrder('ipv4first');
 
 const transporter = nodemailer.createTransport({
@@ -12,15 +11,12 @@ const transporter = nodemailer.createTransport({
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  // Force IPv4 connection
   family: 4,
   connectionTimeout: 15000,
   greetingTimeout: 15000,
   socketTimeout: 20000,
   dnsTimeout: 5000,
-  tls: {
-    rejectUnauthorized: false,
-  },
+  tls: { rejectUnauthorized: false },
 });
 
 /* ---------- helpers ---------- */
@@ -37,7 +33,73 @@ function parseEmails(input) {
     .slice(0, 5);
 }
 
-/* ---------- senders ---------- */
+/* ---------- WELCOME / VERIFICATION EMAIL ---------- */
+
+async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
+  const primary = parseEmails(to);
+  if (!primary.length) throw new Error('No valid recipient');
+
+  const name = fullName || 'there';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
+      <h2 style="text-align: center; color: #2563eb; margin-top: 0;">Welcome to FitForge 💪</h2>
+      <p style="color:#333;">Hi ${name},</p>
+      <p style="color:#333;">
+        Thanks for signing up! Please confirm your email address to activate your account.
+      </p>
+
+      <p style="text-align: center; margin: 28px 0;">
+        <a href="${verifyUrl}"
+           style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
+          Verify my email
+        </a>
+      </p>
+
+      <p style="font-size: 12px; color:#666;">This link expires in 24 hours.</p>
+
+      <hr style="border:none; border-top:1px solid #eee; margin: 24px 0;" />
+
+      <p style="font-size: 13px; color:#333;">Here's what you can do once you're in:</p>
+      <ul style="font-size: 13px; color:#333; padding-left: 20px;">
+        <li>Log workouts and beat your personal records</li>
+        <li>Build custom routines</li>
+        <li>Subscribe to a membership plan</li>
+        <li>Rent gym equipment by the hour</li>
+        <li>Get coaching feedback from your coach</li>
+      </ul>
+
+      <p style="font-size: 11px; color: #888; text-align: center; margin-bottom: 0; margin-top: 24px;">
+        If the button doesn't work, paste this link in your browser:<br/>
+        <span style="word-break: break-all;">${verifyUrl}</span>
+      </p>
+      <p style="font-size: 12px; color: #888; text-align: center; margin-top: 24px;">
+        — The FitForge Team<br/>
+        <i>Your move, your progress.</i>
+      </p>
+    </div>
+  `;
+
+  const opts = {
+    from: `"FitForge" <${process.env.EMAIL_USER}>`,
+    replyTo: process.env.EMAIL_USER,
+    to: primary,
+    subject: 'Verify your FitForge account 💪',
+    html,
+  };
+
+  console.log('[mailer] Sending welcome email →', primary);
+  try {
+    const info = await transporter.sendMail(opts);
+    console.log('[mailer] ✅ Welcome sent:', info.messageId, '→', info.accepted);
+    return info;
+  } catch (err) {
+    console.error('[mailer] ❌ Welcome failed:', err.message);
+    throw err;
+  }
+}
+
+/* ---------- PAYMENT VERIFICATION EMAIL ---------- */
 
 async function sendPaymentVerificationEmail({
   to,
@@ -80,10 +142,6 @@ async function sendPaymentVerificationEmail({
         ${itemName ? `<tr><td style="padding: 6px 0;"><strong>Item:</strong></td><td style="text-align:right;">${itemName}</td></tr>` : ''}
       </table>
 
-      <p style="margin-top: 24px; color:#333;">
-        After sending the payment, please tap the button below so we can verify it.
-      </p>
-
       <p style="text-align: center; margin: 24px 0;">
         <a href="${verifyUrl}"
            style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
@@ -113,18 +171,10 @@ async function sendPaymentVerificationEmail({
     opts.cc = adminCc;
   }
 
-  console.log('[mailer] Sending verification email:', {
-    to: recipients,
-    cc: opts.cc || null,
-    reference,
-  });
-
+  console.log('[mailer] Sending verification email →', recipients);
   try {
     const info = await transporter.sendMail(opts);
     console.log('[mailer] ✅ Sent:', info.messageId, '→', info.accepted);
-    if (info.rejected && info.rejected.length) {
-      console.warn('[mailer] ⚠️  Rejected:', info.rejected);
-    }
     return info;
   } catch (err) {
     console.error('[mailer] ❌ Send failed:', err.message);
@@ -171,6 +221,7 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
 
 module.exports = {
   parseEmails,
+  sendWelcomeVerificationEmail,
   sendPaymentVerificationEmail,
   sendPaymentResultEmail,
 };
