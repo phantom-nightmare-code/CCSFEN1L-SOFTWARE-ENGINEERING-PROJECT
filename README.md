@@ -192,7 +192,6 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 ---
 
 ## 📁 Folder Structure
-## 📁 Folder Structure
 
 ```text
 FitForge/
