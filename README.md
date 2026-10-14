@@ -192,7 +192,9 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 ---
 
 ## 📁 Folder Structure
+## 📁 Folder Structure
 
+```text
 FitForge/
 ├── .env                       # Environment variables (not committed)
 ├── .env.example               # Template for .env
@@ -209,12 +211,16 @@ FitForge/
 │   └── auth.js                # JWT verification middleware
 │
 ├── models/
-│   └── mongo/                 # Mongoose schemas (ActivityLog, PaymentLog, AdminMetric)
+│   └── mongo/                 # Mongoose schemas
+│       ├── ActivityLog.js
+│       ├── PaymentLog.js
+│       └── AdminMetric.js
 │
 ├── services/
 │   ├── activityLogger.js      # Logs user actions to MongoDB
-│   ├── prDetection.js         # Epley 1RM computation + PR updates
-│   ├── recommendation.js      # Recommends exercises for neglected muscle groups
+│   ├── auditLogger.js         # Logs admin actions to MySQL
+│   ├── prDetection.js         # Epley 1RM + PR updates
+│   ├── recommendation.js      # Recommends exercises for neglected muscles
 │   └── mailer.js              # Gmail SMTP email sending
 │
 ├── routes/                    # All API endpoints
@@ -242,8 +248,41 @@ FitForge/
         ├── api.js
         ├── App.jsx
         ├── context/           # Auth, Theme, Toast providers
-        ├── components/        # Navbar, Receipt, QRModal, etc.
+        │   ├── AuthContext.jsx
+        │   ├── ThemeContext.jsx
+        │   └── ToastContext.jsx
+        ├── components/        # Reusable UI
+        │   ├── Navbar.jsx
+        │   ├── Receipt.jsx
+        │   ├── QRModal.jsx
+        │   ├── ProtectedRoute.jsx
+        │   ├── Card.jsx
+        │   └── admin/
+        │       ├── AuditLog.jsx
+        │       ├── RemoveUserModal.jsx
+        │       ├── RentalInventory.jsx
+        │       ├── ExerciseLibrary.jsx
+        │       ├── RevenueChart.jsx
+        │       ├── UserDetailModal.jsx
+        │       └── CoachManagement.jsx
         └── pages/             # Route components
+            ├── Home.jsx
+            ├── Login.jsx
+            ├── Register.jsx
+            ├── Profile.jsx
+            ├── Admin.jsx
+            ├── Membership.jsx
+            ├── Rentals.jsx
+            ├── Recommendations.jsx
+            ├── Workouts.jsx
+            ├── Routines.jsx
+            ├── Analytics.jsx
+            ├── Exercises.jsx
+            ├── VerifyPayment.jsx
+            ├── MyCoach.jsx
+            ├── Coach.jsx
+            └── CoachClient.jsx
+```
 ---
 
 ## 🚀 Getting Started (Local Development)
