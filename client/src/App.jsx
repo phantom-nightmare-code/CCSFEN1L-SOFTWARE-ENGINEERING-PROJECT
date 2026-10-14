@@ -18,6 +18,7 @@ import Routines from './pages/Routines';
 import Analytics from './pages/Analytics';
 import Exercises from './pages/Exercises';
 import VerifyPayment from './pages/VerifyPayment';
+import VerifyEmail from './pages/VerifyEmail';
 import MyCoach from './pages/MyCoach';
 import Coach from './pages/Coach';
 import CoachClient from './pages/CoachClient';
@@ -41,6 +42,7 @@ export default function App() {
                   <Route path="/login"    element={<Login />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/verify-payment/:reference" element={<VerifyPayment />} />
+                  <Route path="/verify-email/:token" element={<VerifyEmail />} />
 
                   <Route element={<ProtectedRoute />}>
                     <Route path="/workouts"        element={<Workouts />} />
