@@ -38,12 +38,16 @@ export default function App() {
               <Navbar />
               <main className="flex-1">
                 <Routes>
+                  {/* Public routes */}
                   <Route path="/"         element={<Home />} />
                   <Route path="/login"    element={<Login />} />
                   <Route path="/register" element={<Register />} />
-                  <Route path="/verify-payment/:reference" element={<VerifyPayment />} />
-                  <Route path="/verify-email/:token" element={<VerifyEmail />} />
 
+                  {/* Public verification pages */}
+                  <Route path="/verify-payment/:reference" element={<VerifyPayment />} />
+                  <Route path="/verify-email/:token"       element={<VerifyEmail />} />
+
+                  {/* Logged-in user routes */}
                   <Route element={<ProtectedRoute />}>
                     <Route path="/workouts"        element={<Workouts />} />
                     <Route path="/routines"        element={<Routines />} />
@@ -56,15 +60,18 @@ export default function App() {
                     <Route path="/my-coach"        element={<MyCoach />} />
                   </Route>
 
+                  {/* Coach-only routes */}
                   <Route element={<CoachRoute />}>
-                    <Route path="/coach"             element={<Coach />} />
-                    <Route path="/coach/client/:id"  element={<CoachClient />} />
+                    <Route path="/coach"            element={<Coach />} />
+                    <Route path="/coach/client/:id" element={<CoachClient />} />
                   </Route>
 
+                  {/* Admin-only routes */}
                   <Route element={<AdminRoute />}>
                     <Route path="/admin" element={<Admin />} />
                   </Route>
 
+                  {/* Fallback */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </main>
