@@ -1,7 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const mysql = require('mysql2/promise'); // 👈 Inline MySQL connection
+const mysql = require('mysql2/promise'); 
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -15,10 +15,10 @@ const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'fitforge', // Change this to your exact DB name
+  database: process.env.DB_NAME || 'fitforge', 
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 2, // 👈 CRITICAL: Low limit to prevent "max_user_connections" error
   queueLimit: 0
 });
 
@@ -54,7 +54,7 @@ app.use('/api/revoke', revokeRoutes);
 app.use('/api/routines', routinesRoutes);
 app.use('/api/workouts', workoutsRoutes);
 
-// ⚠️ THE USER PROFILE ROUTE (Now with detailed error reporting)
+// ⚠️ THE USER PROFILE ROUTE
 app.get('/api/users/:id', async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -69,7 +69,6 @@ app.get('/api/users/:id', async (req, res) => {
     res.json(rows[0]); 
   } catch (error) {
     console.error("Database error fetching user:", error);
-    // 👇 THIS LINE WILL SHOW THE ACTUAL ERROR
     res.status(500).json({ error: error.message }); 
   }
 });
