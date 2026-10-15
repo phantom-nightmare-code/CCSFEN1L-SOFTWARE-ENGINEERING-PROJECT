@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'; 
+const API_URL = import.meta.env.VITE_API_URL || 'https://fitforge-backend-wey2.onrender.com'; 
 
 export default function Profile() {
   const { user, setUser, isAdmin, token } = useAuth(); 
@@ -25,14 +25,9 @@ export default function Profile() {
   // --- BULLETPROOF DATE FORMATTING ---
   const formatDate = (dateString) => {
     if (!dateString) return '—';
-    
-    // Handle MySQL timestamp format (replace space with 'T' for Safari compatibility)
     const safeDateString = typeof dateString === 'string' ? dateString.replace(' ', 'T') : dateString;
     const date = new Date(safeDateString);
-    
-    if (isNaN(date.getTime())) return '—'; // Catch invalid dates
-    
-    // Returns format like "May 2024"
+    if (isNaN(date.getTime())) return '—'; 
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
@@ -46,14 +41,13 @@ export default function Profile() {
     const fetchData = async () => {
       setLoading(true);
       try {
+        // ⚠️ IMPORTANT: If you chose Option 2, change this URL to your existing route!
         const response = await fetch(`${API_URL}/api/users/${user.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (response.ok) {
           const data = await response.json();
-          
-          // 🔍 DEBUG: Check your browser console to see if created_at is here!
           console.log("Backend Data Received:", data); 
           
           setCoachDetails({
@@ -65,6 +59,8 @@ export default function Profile() {
           if (setUser && data.full_name) {
             setUser(prev => ({ ...prev, full_name: data.full_name }));
           }
+        } else {
+          console.error("Failed to fetch profile. Status:", response.status);
         }
       } catch (error) {
         console.error("Error fetching profile data:", error);
@@ -79,6 +75,7 @@ export default function Profile() {
   const handleSaveProfile = async () => {
     setSaveLoading(true);
     try {
+      // ⚠️ IMPORTANT: Update this URL if your save route is different
       const response = await fetch(`${API_URL}/api/users/${user.id}/coach-details`, {
         method: 'PUT',
         headers: {
@@ -144,12 +141,9 @@ export default function Profile() {
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Status</p>
               <p className="text-blue-400 font-bold text-2xl">Active</p>
             </div>
-            {/* MEMBER SINCE CARD */}
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Member Since</p>
-              <p className="text-gray-200 font-bold text-2xl">
-                {formatDate(coachDetails.created_at)}
-              </p>
+              <p className="text-gray-200 font-bold text-2xl">{formatDate(coachDetails.created_at)}</p>
             </div>
           </>
         ) : (
@@ -168,9 +162,7 @@ export default function Profile() {
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Member Since</p>
-              <p className="text-gray-200 font-bold text-2xl">
-                {formatDate(coachDetails.created_at)}
-              </p>
+              <p className="text-gray-200 font-bold text-2xl">{formatDate(coachDetails.created_at)}</p>
             </div>
           </>
         )}
@@ -298,9 +290,7 @@ export default function Profile() {
                   </div>
                   <div className="flex justify-between items-center border-b border-gray-800 pb-2">
                     <span className="text-gray-500">Member Since</span>
-                    <span className="text-white font-medium">
-                      {formatDate(coachDetails.created_at)}
-                    </span>
+                    <span className="text-white font-medium">{formatDate(coachDetails.created_at)}</span>
                   </div>
                 </>
               ) : (
@@ -340,7 +330,6 @@ export default function Profile() {
           No active rentals.
         </div>
       )}
-
     </div>
   );
 }
