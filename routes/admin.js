@@ -964,4 +964,159 @@ router.delete('/coach-assignments/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/* ============================================================
+   COACH RATINGS (admin management)
+   ============================================================ */
+
+/* GET /api/admin/coaches/:id/ratings — list all ratings for a coach */
+router.get('/coaches/:id/ratings', async (req, res, next) => {
+  try {
+    const coachId = Number(req.params.id);
+
+    const [[coach]] = await pool.query(
+      'SELECT id, full_name, username, email, coach_hourly_rate FROM users WHERE id = ? AND role = "coach"',
+      [coachId]
+    );
+    if (!coach) return res.status(404).json({ error: 'Coach not found' });
+
+    const [ratings] = await pool.query(
+      `SELECT cr.id, cr.rating, cr.review, cr.created_at, cr.updated_at,
+              u.id AS member_id, u.full_name AS member_name,
+              u.username AS member_username, u.email AS member_email
+       FROM coach_ratings cr
+       JOIN users u ON u.id = cr.member_id
+       WHERE cr.coach_id = ?
+       ORDER BY cr.created_at DESC`,
+      [coachId]
+    );
+
+    const [[stats]] = await pool.query(
+      `SELECT COALESCE(AVG(rating), 0) AS avgRating, COUNT(*) AS total
+       FROM coach_ratings WHERE coach_id = ?`,
+      [coachId]
+    );
+
+    res.json({
+      coach,
+      ratings,
+      stats: {
+        avgRating: Number(stats.avgRating),
+        total: Number(stats.total),
+      },
+    });
+  } catch (err) { next(err); }
+});
+
+/* POST /api/admin/coaches/:id/ratings — admin adds a rating on behalf of a member */
+router.post('/coaches/:id/ratings', async (req, res, next) => {
+  try {
+    const coachId = Number(req.params.id);
+    const { memberId, rating, review } = req.body;
+
+    if (!memberId || !rating)
+      return res.status(400).json({ error: 'memberId and rating required' });
+
+    const ratingNum = Number(rating);
+    if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5)
+      return res.status(400).json({ error: 'Rating must be 1-5' });
+
+    const [[coach]] = await pool.query(
+      'SELECT id FROM users WHERE id = ? AND role = "coach"', [coachId]
+    );
+    if (!coach) return res.status(404).json({ error: 'Coach not found' });
+
+    const [[member]] = await pool.query(
+      'SELECT id FROM users WHERE id = ?', [memberId]
+    );
+    if (!member) return res.status(404).json({ error: 'Member not found' });
+
+    await pool.query(
+      `INSERT INTO coach_ratings (coach_id, member_id, rating, review)
+       VALUES (?, ?, ?, ?)
+       ON DUPLICATE KEY UPDATE rating = VALUES(rating), review = VALUES(review)`,
+      [coachId, memberId, ratingNum, review || null]
+    );
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'coach_rating_created',
+      targetType: 'coach_rating',
+      targetId: coachId,
+      details: { coachId, memberId, rating: ratingNum },
+      req,
+    });
+
+    res.status(201).json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/* PATCH /api/admin/coaches/:id/ratings/:ratingId — edit a rating */
+router.patch('/coaches/:id/ratings/:ratingId', async (req, res, next) => {
+  try {
+    const ratingId = Number(req.params.ratingId);
+    const { rating, review } = req.body;
+
+    const fields = [];
+    const params = [];
+
+    if (rating !== undefined) {
+      const ratingNum = Number(rating);
+      if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5)
+        return res.status(400).json({ error: 'Rating must be 1-5' });
+      fields.push('rating = ?');
+      params.push(ratingNum);
+    }
+    if (review !== undefined) {
+      fields.push('review = ?');
+      params.push(review || null);
+    }
+
+    if (!fields.length) return res.status(400).json({ error: 'No fields to update' });
+
+    params.push(ratingId);
+    await pool.query(
+      `UPDATE coach_ratings SET ${fields.join(', ')} WHERE id = ?`,
+      params
+    );
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'coach_rating_updated',
+      targetType: 'coach_rating',
+      targetId: ratingId,
+      details: { ratingId, changes: req.body },
+      req,
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/* DELETE /api/admin/coaches/:id/ratings/:ratingId */
+router.delete('/coaches/:id/ratings/:ratingId', async (req, res, next) => {
+  try {
+    const ratingId = Number(req.params.ratingId);
+    const coachId = Number(req.params.id);
+
+    const [[row]] = await pool.query(
+      'SELECT id, rating, member_id FROM coach_ratings WHERE id = ? AND coach_id = ?',
+      [ratingId, coachId]
+    );
+    if (!row) return res.status(404).json({ error: 'Rating not found' });
+
+    await pool.query('DELETE FROM coach_ratings WHERE id = ?', [ratingId]);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'coach_rating_deleted',
+      targetType: 'coach_rating',
+      targetId: ratingId,
+      details: { coachId, memberId: row.member_id, rating: row.rating },
+      req,
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
