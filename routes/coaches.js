@@ -6,9 +6,7 @@ const { logActivity } = require('../services/activityLogger');
 const router = express.Router();
 router.use(authenticate, requireCoach);
 
-/* ============================================================
-   COACH PROFILE
-   ============================================================ */
+/* ---------- Coach profile ---------- */
 
 router.get('/me', async (req, res, next) => {
   try {
@@ -22,19 +20,84 @@ router.get('/me', async (req, res, next) => {
        WHERE coach_id = ? AND status = 'active'`,
       [req.user.id]
     );
-
     const [[{ feedbackCount }]] = await pool.query(
       'SELECT COUNT(*) AS feedbackCount FROM coach_feedback WHERE coach_id = ?',
       [req.user.id]
     );
+    const [[{ pendingRequests }]] = await pool.query(
+      `SELECT COUNT(*) AS pendingRequests FROM coach_requests WHERE status = 'pending'`
+    );
 
-    res.json({ coach, stats: { clientCount, feedbackCount } });
+    res.json({ coach, stats: { clientCount, feedbackCount, pendingRequests } });
   } catch (err) { next(err); }
 });
 
-/* ============================================================
-   CLIENTS
-   ============================================================ */
+/* ---------- Coach requests ---------- */
+
+router.get('/requests', async (req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT cr.*, u.email AS member_email, u.full_name AS member_name, u.username AS member_username
+       FROM coach_requests cr
+       JOIN users u ON u.id = cr.member_id
+       WHERE cr.status = 'pending'
+       ORDER BY cr.created_at DESC`
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+});
+
+router.patch('/requests/:id/accept', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const [[reqRow]] = await pool.query(
+      'SELECT * FROM coach_requests WHERE id = ? AND status = "pending"',
+      [id]
+    );
+    if (!reqRow) return res.status(404).json({ error: 'Request not found or already handled' });
+
+    await pool.query(
+      `INSERT INTO coach_clients (coach_id, client_id, status)
+       VALUES (?, ?, 'active')
+       ON DUPLICATE KEY UPDATE status = 'active'`,
+      [req.user.id, reqRow.member_id]
+    );
+
+    await pool.query(
+      `UPDATE coach_requests
+       SET status='accepted', coach_id=?, responded_at=NOW()
+       WHERE id = ?`,
+      [req.user.id, id]
+    );
+
+    await pool.query(
+      `UPDATE coach_requests SET status='cancelled', responded_at=NOW()
+       WHERE member_id = ? AND status='pending' AND id <> ?`,
+      [reqRow.member_id, id]
+    );
+
+    await logActivity({
+      userId: req.user.id, action: 'coach_request_accepted', req,
+      metadata: { requestId: id, memberId: reqRow.member_id },
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.patch('/requests/:id/decline', async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    await pool.query(
+      `UPDATE coach_requests SET status='declined', coach_id=?, responded_at=NOW()
+       WHERE id = ? AND status='pending'`,
+      [req.user.id, id]
+    );
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/* ---------- Clients ---------- */
 
 router.get('/clients', async (req, res, next) => {
   try {
@@ -44,8 +107,7 @@ router.get('/clients', async (req, res, next) => {
               (SELECT COUNT(*) FROM workouts WHERE user_id = u.id) AS workoutCount,
               (SELECT MAX(workout_date) FROM workouts WHERE user_id = u.id) AS lastWorkout,
               (SELECT COUNT(*) FROM coach_feedback
-               WHERE coach_id = ? AND client_id = u.id
-                 AND read_at IS NULL) AS unreadCount
+               WHERE coach_id = ? AND client_id = u.id AND read_at IS NULL) AS unreadCount
        FROM coach_clients cc
        JOIN users u ON u.id = cc.client_id
        WHERE cc.coach_id = ? AND cc.status = 'active'
@@ -59,14 +121,11 @@ router.get('/clients', async (req, res, next) => {
 router.get('/clients/:id', async (req, res, next) => {
   try {
     const clientId = Number(req.params.id);
-
     const [[assignment]] = await pool.query(
-      `SELECT id FROM coach_clients
-       WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
+      `SELECT id FROM coach_clients WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
       [req.user.id, clientId]
     );
-    if (!assignment)
-      return res.status(403).json({ error: 'Not assigned to this client' });
+    if (!assignment) return res.status(403).json({ error: 'Not assigned to this client' });
 
     const [[client]] = await pool.query(
       'SELECT id, email, username, full_name, role, created_at FROM users WHERE id = ?',
@@ -85,33 +144,24 @@ router.get('/clients/:id', async (req, res, next) => {
     );
 
     const [recentWorkouts] = await pool.query(
-      `SELECT id, name, workout_date, notes
-       FROM workouts WHERE user_id = ?
-       ORDER BY workout_date DESC LIMIT 10`,
-      [clientId]
+      `SELECT id, name, workout_date, notes FROM workouts
+       WHERE user_id = ? ORDER BY workout_date DESC LIMIT 10`, [clientId]
     );
-
     const [memberships] = await pool.query(
       `SELECT type, status, start_date, end_date FROM memberships
-       WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`,
-      [clientId]
+       WHERE user_id = ? ORDER BY created_at DESC LIMIT 1`, [clientId]
     );
-
     const [recentPRs] = await pool.query(
       `SELECT pr.best_1rm, pr.achieved_at, e.name
-       FROM personal_records pr
-       JOIN exercises e ON e.id = pr.exercise_id
-       WHERE pr.user_id = ?
-       ORDER BY pr.achieved_at DESC LIMIT 5`,
-      [clientId]
+       FROM personal_records pr JOIN exercises e ON e.id = pr.exercise_id
+       WHERE pr.user_id = ? ORDER BY pr.achieved_at DESC LIMIT 5`, [clientId]
     );
 
     res.json({
       client,
       stats: { workoutCount, prCount, feedbackCount },
       membership: memberships[0] || null,
-      recentWorkouts,
-      recentPRs,
+      recentWorkouts, recentPRs,
     });
   } catch (err) { next(err); }
 });
@@ -119,21 +169,16 @@ router.get('/clients/:id', async (req, res, next) => {
 router.get('/clients/:id/workouts', async (req, res, next) => {
   try {
     const clientId = Number(req.params.id);
-
     const [[assignment]] = await pool.query(
-      `SELECT id FROM coach_clients
-       WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
+      `SELECT id FROM coach_clients WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
       [req.user.id, clientId]
     );
-    if (!assignment)
-      return res.status(403).json({ error: 'Not assigned to this client' });
+    if (!assignment) return res.status(403).json({ error: 'Not assigned' });
 
     const [workouts] = await pool.query(
       `SELECT * FROM workouts WHERE user_id = ?
-       ORDER BY workout_date DESC LIMIT 50`,
-      [clientId]
+       ORDER BY workout_date DESC LIMIT 50`, [clientId]
     );
-
     if (!workouts.length) return res.json([]);
 
     const ids = workouts.map(w => w.id);
@@ -141,8 +186,7 @@ router.get('/clients/:id/workouts', async (req, res, next) => {
       `SELECT ws.*, e.name AS exercise_name, e.muscle_group
        FROM workout_sets ws
        JOIN exercises e ON e.id = ws.exercise_id
-       WHERE ws.workout_id IN (?)`,
-      [ids]
+       WHERE ws.workout_id IN (?)`, [ids]
     );
 
     const grouped = {};
@@ -155,42 +199,64 @@ router.get('/clients/:id/workouts', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* ============================================================
-   FEEDBACK
-   ============================================================ */
+/* ---------- Suggested workout flow ---------- */
+
+router.get('/clients/:id/suggested-workout', async (req, res, next) => {
+  try {
+    const clientId = Number(req.params.id);
+    const [[assignment]] = await pool.query(
+      `SELECT id FROM coach_clients WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
+      [req.user.id, clientId]
+    );
+    if (!assignment) return res.status(403).json({ error: 'Not assigned' });
+
+    const [recent] = await pool.query(
+      `SELECT e.muscle_group, COUNT(*) AS cnt
+       FROM workout_sets ws
+       JOIN workouts w ON w.id = ws.workout_id
+       JOIN exercises e ON e.id = ws.exercise_id
+       WHERE w.user_id = ? AND w.workout_date >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+       GROUP BY e.muscle_group
+       ORDER BY cnt DESC LIMIT 2`,
+      [clientId]
+    );
+    const recentGroups = recent.map(r => r.muscle_group);
+
+    let pickGroups = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core']
+      .filter(g => !recentGroups.includes(g));
+    if (pickGroups.length < 3) pickGroups = ['Chest', 'Back', 'Legs'];
+
+    const [exercises] = await pool.query(
+      `SELECT * FROM exercises WHERE muscle_group IN (?) ORDER BY RAND() LIMIT 5`,
+      [pickGroups]
+    );
+
+    res.json({ focusGroups: pickGroups.slice(0, 3), exercises });
+  } catch (err) { next(err); }
+});
+
+/* ---------- Feedback ---------- */
 
 router.post('/feedback', async (req, res, next) => {
   try {
     const { clientId, workoutId, subject, content, rating } = req.body;
-    if (!clientId || !content)
-      return res.status(400).json({ error: 'clientId and content required' });
+    if (!clientId || !content) return res.status(400).json({ error: 'clientId and content required' });
 
     const [[assignment]] = await pool.query(
-      `SELECT id FROM coach_clients
-       WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
+      `SELECT id FROM coach_clients WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
       [req.user.id, clientId]
     );
-    if (!assignment)
-      return res.status(403).json({ error: 'Not assigned to this client' });
+    if (!assignment) return res.status(403).json({ error: 'Not assigned to this client' });
 
     const [result] = await pool.query(
-      `INSERT INTO coach_feedback
-        (coach_id, client_id, workout_id, subject, content, rating)
+      `INSERT INTO coach_feedback (coach_id, client_id, workout_id, subject, content, rating)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        req.user.id,
-        clientId,
-        workoutId || null,
-        subject || null,
-        content,
-        rating != null ? Number(rating) : null,
-      ]
+      [req.user.id, clientId, workoutId || null, subject || null, content,
+       rating != null ? Number(rating) : null]
     );
 
     await logActivity({
-      userId: req.user.id,
-      action: 'coach_feedback_sent',
-      req,
+      userId: req.user.id, action: 'coach_feedback_sent', req,
       metadata: { clientId, subject },
     });
 
@@ -198,43 +264,134 @@ router.post('/feedback', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.get('/feedback', async (req, res, next) => {
-  try {
-    const [rows] = await pool.query(
-      `SELECT cf.*, u.full_name AS client_name, u.email AS client_email,
-              w.name AS workout_name, w.workout_date
-       FROM coach_feedback cf
-       JOIN users u ON u.id = cf.client_id
-       LEFT JOIN workouts w ON w.id = cf.workout_id
-       WHERE cf.coach_id = ?
-       ORDER BY cf.created_at DESC LIMIT 100`,
-      [req.user.id]
-    );
-    res.json(rows);
-  } catch (err) { next(err); }
-});
-
 router.get('/clients/:id/feedback', async (req, res, next) => {
   try {
     const clientId = Number(req.params.id);
-
     const [[assignment]] = await pool.query(
-      `SELECT id FROM coach_clients
-       WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
+      `SELECT id FROM coach_clients WHERE coach_id = ? AND client_id = ? AND status = 'active'`,
       [req.user.id, clientId]
     );
-    if (!assignment)
-      return res.status(403).json({ error: 'Not assigned to this client' });
+    if (!assignment) return res.status(403).json({ error: 'Not assigned' });
 
     const [rows] = await pool.query(
       `SELECT cf.*, w.name AS workout_name, w.workout_date
        FROM coach_feedback cf
        LEFT JOIN workouts w ON w.id = cf.workout_id
        WHERE cf.coach_id = ? AND cf.client_id = ?
-       ORDER BY cf.created_at DESC LIMIT 50`,
+       ORDER BY cf.created_at DESC LIMIT 100`,
       [req.user.id, clientId]
     );
-    res.json(rows);
+
+    if (!rows.length) return res.json([]);
+    const ids = rows.map(r => r.id);
+
+    const [replies] = await pool.query(
+      `SELECT r.*, u.full_name AS author_name, u.role AS author_role
+       FROM coach_feedback_replies r
+       JOIN users u ON u.id = r.author_id
+       WHERE r.feedback_id IN (?)
+       ORDER BY r.created_at ASC`,
+      [ids]
+    );
+    const [reactions] = await pool.query(
+      `SELECT feedback_id, emoji, COUNT(*) AS count,
+              SUM(user_id = ?) AS mine
+       FROM coach_feedback_reactions
+       WHERE feedback_id IN (?)
+       GROUP BY feedback_id, emoji`,
+      [req.user.id, ids]
+    );
+
+    const repliesMap = {}, reactionsMap = {};
+    replies.forEach(r => {
+      repliesMap[r.feedback_id] = repliesMap[r.feedback_id] || [];
+      repliesMap[r.feedback_id].push(r);
+    });
+    reactions.forEach(r => {
+      reactionsMap[r.feedback_id] = reactionsMap[r.feedback_id] || [];
+      reactionsMap[r.feedback_id].push({ emoji: r.emoji, count: Number(r.count), mine: !!Number(r.mine) });
+    });
+
+    res.json(rows.map(r => ({
+      ...r,
+      replies: repliesMap[r.id] || [],
+      reactions: reactionsMap[r.id] || [],
+    })));
+  } catch (err) { next(err); }
+});
+
+router.post('/feedback/:id/replies', async (req, res, next) => {
+  try {
+    const { content } = req.body;
+    if (!content || content.trim().length < 1)
+      return res.status(400).json({ error: 'Content required' });
+
+    const [[fb]] = await pool.query(
+      'SELECT id FROM coach_feedback WHERE id = ? AND coach_id = ?',
+      [req.params.id, req.user.id]
+    );
+    if (!fb) return res.status(403).json({ error: 'Not your feedback' });
+
+    const [r] = await pool.query(
+      `INSERT INTO coach_feedback_replies (feedback_id, author_id, content)
+       VALUES (?, ?, ?)`,
+      [req.params.id, req.user.id, content.trim()]
+    );
+
+    const [[row]] = await pool.query(
+      `SELECT r.*, u.full_name AS author_name, u.role AS author_role
+       FROM coach_feedback_replies r
+       JOIN users u ON u.id = r.author_id
+       WHERE r.id = ?`,
+      [r.insertId]
+    );
+
+    res.status(201).json(row);
+  } catch (err) { next(err); }
+});
+
+router.post('/feedback/:id/react', async (req, res, next) => {
+  try {
+    const { emoji } = req.body;
+    if (!emoji) return res.status(400).json({ error: 'Emoji required' });
+
+    const [[fb]] = await pool.query(
+      'SELECT id FROM coach_feedback WHERE id = ? AND coach_id = ?',
+      [req.params.id, req.user.id]
+    );
+    if (!fb) return res.status(403).json({ error: 'Not your feedback' });
+
+    const [existing] = await pool.query(
+      `SELECT id FROM coach_feedback_reactions
+       WHERE feedback_id = ? AND user_id = ? AND emoji = ?`,
+      [req.params.id, req.user.id, emoji]
+    );
+
+    if (existing.length) {
+      await pool.query('DELETE FROM coach_feedback_reactions WHERE id = ?', [existing[0].id]);
+      return res.json({ ok: true, action: 'removed' });
+    }
+
+    await pool.query(
+      `INSERT INTO coach_feedback_reactions (feedback_id, user_id, emoji)
+       VALUES (?, ?, ?)`,
+      [req.params.id, req.user.id, emoji]
+    );
+    res.json({ ok: true, action: 'added' });
+  } catch (err) { next(err); }
+});
+
+router.patch('/feedback/:id/close', async (req, res, next) => {
+  try {
+    const [result] = await pool.query(
+      `UPDATE coach_feedback
+       SET closed_at = NOW(), closed_by = ?
+       WHERE id = ? AND coach_id = ? AND closed_at IS NULL`,
+      [req.user.id, req.params.id, req.user.id]
+    );
+    if (!result.affectedRows)
+      return res.status(400).json({ error: 'Already closed or not yours' });
+    res.json({ ok: true });
   } catch (err) { next(err); }
 });
 
@@ -244,8 +401,7 @@ router.delete('/feedback/:id', async (req, res, next) => {
       'DELETE FROM coach_feedback WHERE id = ? AND coach_id = ?',
       [req.params.id, req.user.id]
     );
-    if (!result.affectedRows)
-      return res.status(404).json({ error: 'Feedback not found' });
+    if (!result.affectedRows) return res.status(404).json({ error: 'Not found' });
     res.json({ ok: true });
   } catch (err) { next(err); }
 });
