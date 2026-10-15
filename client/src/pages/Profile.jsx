@@ -26,14 +26,17 @@ export default function Profile() {
   const formatDate = (dateString) => {
     // If no date exists in DB, fallback to current date instead of showing "—"
     if (!dateString) {
-      return new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      // ✅ FIXED: Added 'day: numeric' to show exact date
+      return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
     const safeDateString = typeof dateString === 'string' ? dateString.replace(' ', 'T') : dateString;
     const date = new Date(safeDateString);
     if (isNaN(date.getTime())) {
-      return new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      // ✅ FIXED: Added 'day: numeric' to show exact date
+      return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
-    return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    // ✅ FIXED: Added 'day: numeric' to show exact date
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   // --- FETCH DATA FROM BACKEND ---
@@ -46,7 +49,6 @@ export default function Profile() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // ✅ FIXED: Removed duplicate '/api' from the URL
         const response = await fetch(`${API_URL}/users/${user.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -80,7 +82,6 @@ export default function Profile() {
   const handleSaveProfile = async () => {
     setSaveLoading(true);
     try {
-      // ✅ FIXED: Removed duplicate '/api' from the URL
       const response = await fetch(`${API_URL}/users/${user.id}/coach-details`, {
         method: 'PUT',
         headers: {
