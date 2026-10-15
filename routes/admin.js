@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const pool = require('../db/mysql');
 const ActivityLog = require('../models/mongo/ActivityLog');
 const AdminMetric = require('../models/mongo/AdminMetric');
@@ -47,7 +48,8 @@ router.get('/stats/aggregate', async (_req, res, next) => {
 router.get('/users', async (_req, res, next) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, email, username, full_name, role, created_at FROM users ORDER BY id DESC'
+      `SELECT id, email, username, full_name, role, created_at, pending_deletion_at
+       FROM users ORDER BY id DESC`
     );
     res.json(rows);
   } catch (err) { next(err); }
@@ -82,6 +84,10 @@ router.patch('/users/:id/role', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/* ============================================================
+   USER REMOVAL — scheduled with revocation window
+   ============================================================ */
+
 router.delete('/users/:id', async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
@@ -115,7 +121,6 @@ router.delete('/users/:id', async (req, res, next) => {
     }
 
     // Schedule deletion 7 days from now
-    const crypto = require('crypto');
     const token = crypto.randomBytes(32).toString('hex');
     const deletionDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
 
@@ -126,7 +131,7 @@ router.delete('/users/:id', async (req, res, next) => {
       [deletionDate, token, reason.trim(), userId]
     );
 
-    // Email the user
+    // Email the user (fire-and-forget)
     try {
       const { sendAccountDeletionNoticeEmail } = require('../services/mailer');
       const revokeUrl = `${process.env.CLIENT_URL}/revoke-deletion/${token}`;
@@ -135,7 +140,7 @@ router.delete('/users/:id', async (req, res, next) => {
         fullName: user.full_name || user.username,
         reason: reason.trim(),
         deletionDate: deletionDate.toLocaleDateString(undefined, {
-          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
         }),
         revokeUrl,
       });
@@ -236,30 +241,14 @@ router.get('/users/pending-deletions', async (_req, res, next) => {
   } catch (err) { next(err); }
 });
 
-    await pool.query('DELETE FROM users WHERE id = ?', [userId]);
-
-    await logAdminAction({
-      adminId: req.user.id,
-      action: 'user_removed',
-      targetType: 'user',
-      targetId: userId,
-      details: {
-        removedUser: { email: user.email, username: user.username, role: user.role },
-        reason: reason.trim(),
-      },
-      req,
-    });
-
-    res.json({ ok: true });
-  } catch (err) { next(err); }
-});
-
 router.get('/users/:id/details', async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
 
     const [[user]] = await pool.query(
-      'SELECT id, email, username, full_name, role, created_at, birthday FROM users WHERE id = ?',
+      `SELECT id, email, username, full_name, role, created_at, birthday,
+              pending_deletion_at, deletion_reason
+       FROM users WHERE id = ?`,
       [userId]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -416,10 +405,7 @@ router.get('/memberships', async (req, res, next) => {
       refundedSet = new Set(refunded.map(r => r.referenceId));
     }
 
-    res.json(rows.map(r => ({
-      ...r,
-      has_refund: refundedSet.has(r.id),
-    })));
+    res.json(rows.map(r => ({ ...r, has_refund: refundedSet.has(r.id) })));
   } catch (err) { next(err); }
 });
 
@@ -792,6 +778,7 @@ router.get('/payments/pending', async (_req, res, next) => {
 /* ============================================================
    CLEAR ALL PAYMENTS
    ============================================================ */
+
 router.delete('/payments/clear-all', async (req, res, next) => {
   try {
     const { confirmText } = req.body;
