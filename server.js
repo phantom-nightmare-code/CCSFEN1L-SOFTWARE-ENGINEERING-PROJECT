@@ -10,21 +10,27 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+// ⚠️ MYSQL DATABASE CONNECTION POOL
+// ✅ FIXED: Using the exact variable names from your Render dashboard (MYSQL_...)
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'fitforge', 
-  port: process.env.DB_PORT || 3306,
+  host: process.env.MYSQL_HOST || 'localhost',
+  user: process.env.MYSQL_USER || 'root',
+  password: process.env.MYSQL_PASSWORD || '',
+  database: process.env.MYSQL_DATABASE || 'fitforge', 
+  port: process.env.MYSQL_PORT || 3306,
+  // ✅ FIXED: Added SSL configuration because MYSQL_SSL is set to true
+  ssl: process.env.MYSQL_SSL === 'true' ? { rejectUnauthorized: false } : false,
   waitForConnections: true,
   connectionLimit: 10, 
   queueLimit: 0
 });
 
+// ⚠️ MONGODB CONNECTION (Required for Admin routes)
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB Connected successfully for Admin routes'))
   .catch(err => console.error('MongoDB connection error:', err));
 
+// ⚠️ IMPORT YOUR EXISTING ROUTES
 const adminRoutes = require('./routes/admin');
 const analyticsRoutes = require('./routes/analytics');
 const authRoutes = require('./routes/auth');
@@ -40,6 +46,7 @@ const revokeRoutes = require('./routes/revoke');
 const routinesRoutes = require('./routes/routines');
 const workoutsRoutes = require('./routes/workouts');
 
+// ⚠️ MOUNT YOUR EXISTING ROUTES
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/auth', authRoutes);
@@ -71,8 +78,10 @@ app.get('/api/users/:id', async (req, res) => {
     res.json(rows[0]); 
   } catch (error) {
     console.error("❌ Database error fetching user:", error);
-    // ✅ FIXED: Return sqlMessage if available so frontend sees the real error
-    res.status(500).json({ error: error.sqlMessage || error.message || 'Unknown database error' }); 
+    res.status(500).json({ 
+      error: error.sqlMessage || error.message || 'Unknown database error',
+      fullError: JSON.stringify(error)
+    }); 
   }
 });
 
@@ -92,8 +101,10 @@ app.put('/api/users/:id/coach-details', async (req, res) => {
     res.json({ ok: true, message: 'Profile updated successfully' });
   } catch (error) {
     console.error("❌ Error updating coach details:", error);
-    // ✅ FIXED: Return sqlMessage if available
-    res.status(500).json({ error: error.sqlMessage || error.message || 'Unknown update error' });
+    res.status(500).json({ 
+      error: error.sqlMessage || error.message || 'Unknown database error',
+      fullError: JSON.stringify(error)
+    });
   }
 });
 
