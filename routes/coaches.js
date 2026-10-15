@@ -37,8 +37,8 @@ router.get('/me', async (req, res, next) => {
 
     const [[{ avgRating, reviewCount }]] = await pool.query(
       `SELECT COALESCE(AVG(rating), 0) AS avgRating,
-              COUNT(rating) AS reviewCount
-       FROM coach_feedback WHERE coach_id = ? AND rating IS NOT NULL`,
+              COUNT(*) AS reviewCount
+       FROM coach_ratings WHERE coach_id = ?`,
       [req.user.id]
     );
 
