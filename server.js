@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// ⚠️ DATABASE CONNECTION POOL (Replaces the missing './db' file)
+// ⚠️ DATABASE CONNECTION POOL
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -54,7 +54,7 @@ app.use('/api/revoke', revokeRoutes);
 app.use('/api/routines', routinesRoutes);
 app.use('/api/workouts', workoutsRoutes);
 
-// ⚠️ THE MISSING ROUTE THAT FIXES THE 404 ERROR
+// ⚠️ THE USER PROFILE ROUTE (Now with detailed error reporting)
 app.get('/api/users/:id', async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -69,7 +69,8 @@ app.get('/api/users/:id', async (req, res) => {
     res.json(rows[0]); 
   } catch (error) {
     console.error("Database error fetching user:", error);
-    res.status(500).json({ error: "Internal server error" });
+    // 👇 THIS LINE WILL SHOW THE ACTUAL ERROR
+    res.status(500).json({ error: error.message }); 
   }
 });
 
