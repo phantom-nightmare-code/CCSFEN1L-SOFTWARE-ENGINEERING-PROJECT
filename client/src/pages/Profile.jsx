@@ -2,17 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
 
-// Replace this with your actual backend URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'; 
 
 export default function Profile() {
-  const { user, setUser, isAdmin, token } = useAuth(); // Added setUser in case you want to update local state
+  const { user, setUser, isAdmin, token } = useAuth(); 
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   
-  // State for profile details
   const [coachDetails, setCoachDetails] = useState({
     experience_years: 0,
     expertise: '',
@@ -24,14 +22,17 @@ export default function Profile() {
 
   const isCoach = user?.role === 'coach';
 
-  // --- DATE FORMATTING HELPER ---
+  // --- BULLETPROOF DATE FORMATTING ---
   const formatDate = (dateString) => {
     if (!dateString) return '—';
     
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return '—'; // Check for invalid dates
+    // Handle MySQL timestamp format (replace space with 'T' for Safari compatibility)
+    const safeDateString = typeof dateString === 'string' ? dateString.replace(' ', 'T') : dateString;
+    const date = new Date(safeDateString);
     
-    // Returns format like "Oct 2023"
+    if (isNaN(date.getTime())) return '—'; // Catch invalid dates
+    
+    // Returns format like "May 2024"
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
@@ -52,12 +53,18 @@ export default function Profile() {
         if (response.ok) {
           const data = await response.json();
           
+          // 🔍 DEBUG: Check your browser console to see if created_at is here!
+          console.log("Backend Data Received:", data); 
+          
           setCoachDetails({
             experience_years: data.experience_years || 0,
             expertise: data.expertise || '',
-            // Handles both snake_case (MySQL default) and camelCase (Sequelize/Prisma)
             created_at: data.created_at || data.createdAt || null
           });
+
+          if (setUser && data.full_name) {
+            setUser(prev => ({ ...prev, full_name: data.full_name }));
+          }
         }
       } catch (error) {
         console.error("Error fetching profile data:", error);
@@ -66,7 +73,7 @@ export default function Profile() {
     };
 
     fetchData();
-  }, [user, navigate, token]);
+  }, [user, navigate, token, setUser]);
 
   // --- SAVE PROFILE CHANGES ---
   const handleSaveProfile = async () => {
@@ -137,10 +144,12 @@ export default function Profile() {
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Status</p>
               <p className="text-blue-400 font-bold text-2xl">Active</p>
             </div>
-            {/* 👇 THIS IS THE MEMBER SINCE CARD 👇 */}
+            {/* MEMBER SINCE CARD */}
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Member Since</p>
-              <p className="text-gray-200 font-bold text-2xl">{formatDate(coachDetails.created_at)}</p>
+              <p className="text-gray-200 font-bold text-2xl">
+                {formatDate(coachDetails.created_at)}
+              </p>
             </div>
           </>
         ) : (
@@ -159,7 +168,9 @@ export default function Profile() {
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Member Since</p>
-              <p className="text-gray-200 font-bold text-2xl">{formatDate(coachDetails.created_at)}</p>
+              <p className="text-gray-200 font-bold text-2xl">
+                {formatDate(coachDetails.created_at)}
+              </p>
             </div>
           </>
         )}
@@ -287,7 +298,9 @@ export default function Profile() {
                   </div>
                   <div className="flex justify-between items-center border-b border-gray-800 pb-2">
                     <span className="text-gray-500">Member Since</span>
-                    <span className="text-white font-medium">{formatDate(coachDetails.created_at)}</span>
+                    <span className="text-white font-medium">
+                      {formatDate(coachDetails.created_at)}
+                    </span>
                   </div>
                 </>
               ) : (
