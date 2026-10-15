@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../api';
 import { useToast } from '../context/ToastContext';
+import FeedbackThread from '../components/FeedbackThread';
+import SuggestedWorkoutFlow from '../components/SuggestedWorkoutFlow';
 
 export default function CoachClient() {
   const { id } = useParams();
@@ -12,13 +14,7 @@ export default function CoachClient() {
   const [feedback, setFeedback] = useState([]);
   const [expanded, setExpanded] = useState(null);
   const [loading, setLoading] = useState(true);
-
-  const [form, setForm] = useState({
-    subject: '',
-    content: '',
-    rating: '',
-    workoutId: '',
-  });
+  const [form, setForm] = useState({ subject: '', content: '', rating: '', workoutId: '' });
   const [sending, setSending] = useState(false);
 
   const load = () => {
@@ -55,15 +51,9 @@ export default function CoachClient() {
     } finally { setSending(false); }
   };
 
-  const removeFeedback = async (fid) => {
-    if (!confirm('Delete this feedback?')) return;
-    try {
-      await api.delete(`/coaches/feedback/${fid}`);
-      showToast('Feedback deleted');
-      load();
-    } catch (err) {
-      showToast(err.response?.data?.error || 'Failed', 'error');
-    }
+  const updateFeedback = (updated) => {
+    if (updated._deleted) setFeedback(list => list.filter(f => f.id !== updated.id));
+    else setFeedback(list => list.map(f => f.id === updated.id ? updated : f));
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500">Loading…</div>;
@@ -73,11 +63,8 @@ export default function CoachClient() {
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
-
-      {/* Back link */}
       <Link to="/coach" className="text-sm text-brand-600 hover:underline">← All clients</Link>
 
-      {/* Client header */}
       <section className="bg-gradient-to-br from-blue-600 to-blue-700 text-white rounded-2xl shadow-lg p-6">
         <div className="flex items-center gap-5 flex-wrap">
           <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-3xl font-bold">
@@ -90,9 +77,7 @@ export default function CoachClient() {
             <p className="text-sm text-white/80 truncate">{client.email}</p>
             {membership && (
               <span className={`inline-block mt-2 px-2 py-0.5 rounded text-xs font-semibold ${
-                membership.status === 'active'
-                  ? 'bg-green-400 text-green-900'
-                  : 'bg-white/20'
+                membership.status === 'active' ? 'bg-green-400 text-green-900' : 'bg-white/20'
               }`}>
                 {membership.type?.toUpperCase()} · {membership.status}
               </span>
@@ -101,20 +86,16 @@ export default function CoachClient() {
         </div>
       </section>
 
-      {/* Stats grid */}
       <section className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Stat label="Workouts"   value={stats.workoutCount} />
-        <Stat label="PRs"        value={stats.prCount} />
-        <Stat label="Feedback"   value={stats.feedbackCount} />
-        <Stat label="Member Since" value={client.created_at?.slice(0, 10)} />
+        <Stat label="Workouts" value={stats.workoutCount} />
+        <Stat label="PRs"      value={stats.prCount} />
+        <Stat label="Feedback" value={stats.feedbackCount} />
+        <Stat label="Since"    value={client.created_at?.slice(0, 10)} />
       </section>
 
-      {/* Two-column: workouts + feedback form */}
       <div className="grid lg:grid-cols-2 gap-6">
-
-        {/* Workouts */}
-        <section>
-          <h3 className="text-lg font-semibold mb-3">Recent workouts</h3>
+        <section className="space-y-4">
+          <h3 className="text-lg font-semibold">Recent workouts</h3>
           {workouts.length === 0 ? (
             <p className="text-sm text-gray-500 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
               No workouts logged yet.
@@ -140,14 +121,9 @@ export default function CoachClient() {
                       {w.sets?.map(s => (
                         <div key={s.id} className="text-sm flex justify-between">
                           <span>{s.exercise_name}</span>
-                          <span className="text-gray-500">
-                            {s.weight ?? '—'} kg × {s.reps ?? '—'} reps
-                          </span>
+                          <span className="text-gray-500">{s.weight ?? '—'} kg × {s.reps ?? '—'} reps</span>
                         </div>
                       ))}
-                      {(!w.sets || w.sets.length === 0) && (
-                        <p className="text-xs text-gray-500">No sets recorded.</p>
-                      )}
                     </div>
                   )}
                 </div>
@@ -156,30 +132,27 @@ export default function CoachClient() {
           )}
 
           {recentPRs?.length > 0 && (
-            <div className="mt-4">
+            <div>
               <h4 className="text-sm font-semibold mb-2">Recent PRs</h4>
               <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
                 {recentPRs.map((p, i) => (
                   <div key={i} className="p-3 text-sm flex justify-between">
                     <span>{p.name}</span>
-                    <span className="text-gray-500">
-                      {Number(p.best_1rm).toFixed(1)} kg · {p.achieved_at?.slice(0, 10)}
-                    </span>
+                    <span className="text-gray-500">{Number(p.best_1rm).toFixed(1)} kg</span>
                   </div>
                 ))}
               </div>
             </div>
           )}
+
+          <SuggestedWorkoutFlow clientId={id} endpointPrefix="/coaches" />
         </section>
 
-        {/* Feedback form + history */}
         <section className="space-y-4">
           <div>
             <h3 className="text-lg font-semibold mb-3">Send feedback</h3>
-            <form
-              onSubmit={submit}
-              className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 p-4 space-y-3"
-            >
+            <form onSubmit={submit}
+              className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 p-4 space-y-3">
               <input
                 placeholder="Subject (optional)"
                 value={form.subject}
@@ -191,32 +164,28 @@ export default function CoachClient() {
                 onChange={e => setForm({ ...form, workoutId: e.target.value })}
                 className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
               >
-                <option value="">— Attach to a workout (optional) —</option>
+                <option value="">— Attach to workout (optional) —</option>
                 {workouts.map(w => (
                   <option key={w.id} value={w.id}>
                     {w.name || 'Workout'} ({w.workout_date?.slice(0, 10)})
                   </option>
                 ))}
               </select>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">Rating (optional)</label>
-                <select
-                  value={form.rating}
-                  onChange={e => setForm({ ...form, rating: e.target.value })}
-                  className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
-                >
-                  <option value="">No rating</option>
-                  <option value="1">⭐ 1</option>
-                  <option value="2">⭐⭐ 2</option>
-                  <option value="3">⭐⭐⭐ 3</option>
-                  <option value="4">⭐⭐⭐⭐ 4</option>
-                  <option value="5">⭐⭐⭐⭐⭐ 5</option>
-                </select>
-              </div>
+              <select
+                value={form.rating}
+                onChange={e => setForm({ ...form, rating: e.target.value })}
+                className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
+              >
+                <option value="">No rating</option>
+                <option value="1">⭐ 1</option>
+                <option value="2">⭐⭐ 2</option>
+                <option value="3">⭐⭐⭐ 3</option>
+                <option value="4">⭐⭐⭐⭐ 4</option>
+                <option value="5">⭐⭐⭐⭐⭐ 5</option>
+              </select>
               <textarea
-                required
+                required rows={5}
                 placeholder="Your coaching notes…"
-                rows={5}
                 value={form.content}
                 onChange={e => setForm({ ...form, content: e.target.value })}
                 className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
@@ -231,40 +200,21 @@ export default function CoachClient() {
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold mb-3">Sent feedback ({feedback.length})</h3>
+            <h3 className="text-lg font-semibold mb-3">Feedback history</h3>
             {feedback.length === 0 ? (
               <p className="text-sm text-gray-500 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
-                No feedback sent to this client yet.
+                No feedback yet.
               </p>
             ) : (
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {feedback.map(f => (
-                  <div key={f.id} className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 p-4">
-                    <div className="flex justify-between items-start gap-3">
-                      <div className="min-w-0">
-                        <div className="font-medium text-sm">{f.subject || 'Feedback'}</div>
-                        <div className="text-xs text-gray-500">
-                          {new Date(f.created_at).toLocaleString()}
-                          {f.workout_name && <> · {f.workout_name}</>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {f.rating && <span className="text-xs">{'⭐'.repeat(f.rating)}</span>}
-                        <button
-                          onClick={() => removeFeedback(f.id)}
-                          className="text-xs text-red-600 hover:underline"
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-700 dark:text-gray-300 mt-2 whitespace-pre-wrap">
-                      {f.content}
-                    </p>
-                    {f.read_at && (
-                      <p className="text-[10px] text-green-600 mt-2">✓ Read</p>
-                    )}
-                  </div>
+                  <FeedbackThread
+                    key={f.id}
+                    feedback={f}
+                    onUpdate={updateFeedback}
+                    endpointPrefix="/coaches"
+                    canClose={true}
+                  />
                 ))}
               </div>
             )}
