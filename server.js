@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise'); 
-const mongoose = require('mongoose'); // ✅ ADDED: Required for MongoDB
+const mongoose = require('mongoose'); // ✅ Required for MongoDB
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -19,12 +19,11 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'fitforge', 
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
-  connectionLimit: 10, // ✅ FIXED: Changed from 2 to 10 to prevent crashes under load
+  connectionLimit: 10, // ✅ FIXED: Increased to prevent crashes under load
   queueLimit: 0
 });
 
 // ⚠️ MONGODB CONNECTION (Required for Admin routes)
-// Make sure you have MONGO_URI set in your Render Environment Variables!
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB Connected successfully for Admin routes'))
   .catch(err => console.error('MongoDB connection error:', err));
@@ -61,11 +60,14 @@ app.use('/api/revoke', revokeRoutes);
 app.use('/api/routines', routinesRoutes);
 app.use('/api/workouts', workoutsRoutes);
 
-// ⚠️ THE USER PROFILE ROUTE
+// ⚠️ THE USER PROFILE ROUTE (GET)
 app.get('/api/users/:id', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      'SELECT id, username, full_name, email, role, experience_years, expertise, created_at FROM users WHERE id = ?',
+      // ✅ FIXED: COALESCE ensures a date is returned even if DB is null
+      `SELECT id, username, full_name, email, role, experience_years, expertise, 
+              COALESCE(created_at, NOW()) as created_at 
+       FROM users WHERE id = ?`,
       [req.params.id]
     );
     
@@ -77,6 +79,27 @@ app.get('/api/users/:id', async (req, res) => {
   } catch (error) {
     console.error("Database error fetching user:", error);
     res.status(500).json({ error: error.message }); 
+  }
+});
+
+// ⚠️ THE USER PROFILE UPDATE ROUTE (PUT) — ✅ NEWLY ADDED
+app.put('/api/users/:id/coach-details', async (req, res) => {
+  try {
+    const { full_name, experience_years, expertise } = req.body;
+    const userId = req.params.id;
+
+    if (!userId) return res.status(400).json({ error: 'User ID required' });
+
+    // Update all fields in the MySQL users table
+    await pool.query(
+      'UPDATE users SET full_name = ?, experience_years = ?, expertise = ? WHERE id = ?',
+      [full_name, experience_years || 0, expertise || null, userId]
+    );
+
+    res.json({ ok: true, message: 'Profile updated successfully' });
+  } catch (error) {
+    console.error("Error updating coach details:", error);
+    res.status(500).json({ error: error.message });
   }
 });
 
