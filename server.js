@@ -1,21 +1,28 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-
-// ⚠️ STEP 1: IMPORT YOUR MYSQL CONNECTION
-// Make sure this path matches where your database connection file is located.
-// If your file is named something else (e.g., 'config/db.js'), change './db' to match.
-const db = require('./db'); 
+const mysql = require('mysql2/promise'); // 👈 Inline MySQL connection
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ⚠️ STEP 2: MIDDLEWARE
+// ⚠️ MIDDLEWARE
 app.use(cors());
 app.use(express.json());
 
-// ⚠️ STEP 3: IMPORT YOUR EXISTING ROUTES
-// These are the files from your routes folder screenshot
+// ⚠️ DATABASE CONNECTION POOL (Replaces the missing './db' file)
+const pool = mysql.createPool({
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  database: process.env.DB_NAME || 'fitforge', // Change this to your exact DB name
+  port: process.env.DB_PORT || 3306,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0
+});
+
+// ⚠️ IMPORT YOUR EXISTING ROUTES
 const adminRoutes = require('./routes/admin');
 const analyticsRoutes = require('./routes/analytics');
 const authRoutes = require('./routes/auth');
@@ -31,8 +38,7 @@ const revokeRoutes = require('./routes/revoke');
 const routinesRoutes = require('./routes/routines');
 const workoutsRoutes = require('./routes/workouts');
 
-// ⚠️ STEP 4: MOUNT YOUR EXISTING ROUTES
-// Add any other routes you have here
+// ⚠️ MOUNT YOUR EXISTING ROUTES
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/auth', authRoutes);
@@ -48,12 +54,10 @@ app.use('/api/revoke', revokeRoutes);
 app.use('/api/routines', routinesRoutes);
 app.use('/api/workouts', workoutsRoutes);
 
-// ⚠️ STEP 5: THE MISSING ROUTE THAT FIXES THE 404 ERROR
-// This directly handles GET https://fitforge-backend-wey2.onrender.com/api/users/5
+// ⚠️ THE MISSING ROUTE THAT FIXES THE 404 ERROR
 app.get('/api/users/:id', async (req, res) => {
   try {
-    // We add 'created_at' to the SELECT statement so your frontend gets the date!
-    const [rows] = await db.query(
+    const [rows] = await pool.query(
       'SELECT id, username, full_name, email, role, experience_years, expertise, created_at FROM users WHERE id = ?',
       [req.params.id]
     );
@@ -69,12 +73,12 @@ app.get('/api/users/:id', async (req, res) => {
   }
 });
 
-// Basic health check route to make sure the server is running
+// Health check route
 app.get('/', (req, res) => {
   res.send('FitForge Backend is running!');
 });
 
-// ⚠️ STEP 6: START THE SERVER
+// ⚠️ START THE SERVER
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
