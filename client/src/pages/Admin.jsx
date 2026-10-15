@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from 'recharts';
@@ -34,17 +34,73 @@ export default function Admin() {
   const [detailUser, setDetailUser] = useState(null);
   const [removeUser, setRemoveUser] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState(null);
+
+  // Refs to always have the latest tab in the interval closure
+  const tabRef = useRef(tab);
+  useEffect(() => { tabRef.current = tab; }, [tab]);
+
+  /* ---------- Loaders ---------- */
+
+  const loadAll = async (silent = false) => {
+    if (!silent) setRefreshing(true);
+    try {
+      const [aggr, usr, act, pay, pend] = await Promise.all([
+        api.get('/admin/stats/aggregate').then(r => r.data),
+        api.get('/admin/users').then(r => r.data),
+        api.get('/admin/activity?limit=100').then(r => r.data),
+        api.get('/payments').then(r => r.data),
+        api.get('/admin/payments/pending').then(r => r.data),
+      ]);
+      setAggregate(aggr);
+      setUsers(usr);
+      setActivity(act);
+      setPayments(pay);
+      setPendingPayments(pend);
+      setLastRefreshed(new Date());
+    } catch (err) {
+      console.error('Admin load failed:', err.message);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const loadStatsOnly = async () => {
+    try {
+      const [aggr, pay, pend] = await Promise.all([
+        api.get('/admin/stats/aggregate').then(r => r.data),
+        api.get('/payments').then(r => r.data),
+        api.get('/admin/payments/pending').then(r => r.data),
+      ]);
+      setAggregate(aggr);
+      setPayments(pay);
+      setPendingPayments(pend);
+      setLastRefreshed(new Date());
+    } catch (err) {
+      console.error('Stats refresh failed:', err.message);
+    }
+  };
 
   useEffect(() => {
     api.get(`/admin/stats?range=${range}`).then(r => setStats(r.data));
   }, [range]);
 
+  // Initial load
   useEffect(() => {
-    api.get('/admin/stats/aggregate').then(r => setAggregate(r.data));
-    api.get('/admin/users').then(r => setUsers(r.data));
-    api.get('/admin/activity?limit=100').then(r => setActivity(r.data));
-    api.get('/payments').then(r => setPayments(r.data));
-    api.get('/admin/payments/pending').then(r => setPendingPayments(r.data));
+    loadAll();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-refresh every 30 seconds — only aggregates + payments
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (tabRef.current === 'profile' || tabRef.current === 'payments' || tabRef.current === 'pending') {
+        loadStatsOnly();
+      }
+    }, 30000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -101,9 +157,7 @@ export default function Admin() {
         : r < 0 ? `Membership → Active · ${Math.abs(r)} payment(s) restored`
         : `Membership → ${label}`
       );
-      // Refresh aggregate stats
-      api.get('/admin/stats/aggregate').then(res => setAggregate(res.data));
-      api.get('/payments').then(res => setPayments(res.data));
+      loadStatsOnly();
     } catch (e) {
       showToast(e.response?.data?.error || 'Failed to update', 'error');
     } finally { setBusy(false); }
@@ -124,8 +178,7 @@ export default function Admin() {
       );
       const refunds = data.paymentsRefunded || 0;
       showToast(`Rental → ${label}${refunds ? ` · ${refunds} payment refunded` : ''}`);
-      api.get('/admin/stats/aggregate').then(res => setAggregate(res.data));
-      if (refunds) api.get('/payments').then(res => setPayments(res.data));
+      loadStatsOnly();
     } catch (e) {
       showToast(e.response?.data?.error || 'Failed to update', 'error');
     } finally { setBusy(false); }
@@ -136,8 +189,7 @@ export default function Admin() {
     try {
       await api.patch(`/admin/payments/${p._id}/verify`);
       setPendingPayments(list => list.filter(x => x._id !== p._id));
-      api.get('/payments').then(r => setPayments(r.data));
-      api.get('/admin/stats/aggregate').then(r => setAggregate(r.data));
+      loadStatsOnly();
       showToast('Payment verified & user notified.');
     } catch (e) {
       showToast(e.response?.data?.error || 'Verify failed', 'error');
@@ -150,8 +202,7 @@ export default function Admin() {
     try {
       await api.patch(`/admin/payments/${p._id}/reject`, { reason });
       setPendingPayments(list => list.filter(x => x._id !== p._id));
-      api.get('/payments').then(r => setPayments(r.data));
-      api.get('/admin/stats/aggregate').then(r => setAggregate(r.data));
+      loadStatsOnly();
       showToast('Payment rejected & user notified.', 'info');
     } catch (e) {
       showToast(e.response?.data?.error || 'Reject failed', 'error');
@@ -220,18 +271,36 @@ export default function Admin() {
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-        {tab === 'stats' && (
-          <select
-            value={range} onChange={e => setRange(+e.target.value)}
-            className="border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-700"
+        <div>
+          <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+          {lastRefreshed && (
+            <p className="text-xs text-gray-500 mt-1">
+              Last updated: {lastRefreshed.toLocaleTimeString()} · auto-refreshes every 30s
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => loadAll()}
+            disabled={refreshing}
+            className="px-3 py-2 text-sm rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-40 flex items-center gap-2"
+            title="Refresh all stats"
           >
-            <option value={7}>Last 7 days</option>
-            <option value={30}>Last 30 days</option>
-            <option value={90}>Last 90 days</option>
-            <option value={365}>Last year</option>
-          </select>
-        )}
+            <span className={refreshing ? 'inline-block animate-spin' : ''}>🔄</span>
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+          {tab === 'stats' && (
+            <select
+              value={range} onChange={e => setRange(+e.target.value)}
+              className="border rounded px-2 py-1 dark:bg-gray-800 dark:border-gray-700"
+            >
+              <option value={7}>Last 7 days</option>
+              <option value={30}>Last 30 days</option>
+              <option value={90}>Last 90 days</option>
+              <option value={365}>Last year</option>
+            </select>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-2 flex-wrap border-b border-gray-200 dark:border-gray-800">
@@ -253,7 +322,6 @@ export default function Admin() {
       {/* ==================== PROFILE ==================== */}
       {tab === 'profile' && (
         <div className="space-y-6">
-          {/* Admin's own card */}
           <section className="bg-gradient-to-br from-brand-600 to-brand-700 text-white rounded-2xl shadow-lg p-6">
             <div className="flex items-center gap-5">
               <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur flex items-center justify-center text-3xl font-bold">
@@ -271,9 +339,16 @@ export default function Admin() {
             </div>
           </section>
 
-          {/* AGGREGATE STATS — across all users */}
           <section>
-            <h3 className="text-xl font-semibold mb-3">Platform-wide Statistics</h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-xl font-semibold">Platform-wide Statistics</h3>
+              <button
+                onClick={loadStatsOnly}
+                className="text-xs text-brand-600 hover:underline flex items-center gap-1"
+              >
+                🔄 Refresh
+              </button>
+            </div>
             <div className="grid md:grid-cols-4 gap-3">
               <Card
                 label="Total Spent (all users)"
@@ -294,7 +369,6 @@ export default function Admin() {
             </div>
           </section>
 
-          {/* Users grid */}
           <section>
             <h3 className="text-xl font-semibold mb-3">
               Users who used the website ({users.length})
@@ -470,6 +544,15 @@ export default function Admin() {
       {/* ==================== PAYMENTS ==================== */}
       {tab === 'payments' && (
         <>
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-xl font-semibold">All Payments</h2>
+            <button
+              onClick={loadStatsOnly}
+              className="text-xs text-brand-600 hover:underline flex items-center gap-1"
+            >
+              🔄 Refresh
+            </button>
+          </div>
           <div className="grid md:grid-cols-4 gap-4">
             <Card label="Total Payments" value={payments.length} />
             <Card label="Net Revenue"    value={`₱${totalRevenue.toFixed(2)}`} />
@@ -543,13 +626,21 @@ export default function Admin() {
       {/* ==================== PENDING ==================== */}
       {tab === 'pending' && (
         <div className="space-y-4">
-          <div>
-            <h2 className="text-xl font-semibold">
-              Pending Payments ({pendingPayments.length})
-            </h2>
-            <p className="text-xs text-gray-500 mt-1">
-              These users paid via GCash, Maya, or Bank transfer. Verify once the money arrives.
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">
+                Pending Payments ({pendingPayments.length})
+              </h2>
+              <p className="text-xs text-gray-500 mt-1">
+                These users paid via GCash, Maya, or Bank transfer. Verify once the money arrives.
+              </p>
+            </div>
+            <button
+              onClick={loadStatsOnly}
+              className="text-xs text-brand-600 hover:underline flex items-center gap-1"
+            >
+              🔄 Refresh
+            </button>
           </div>
 
           <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 overflow-x-auto">
@@ -679,7 +770,6 @@ export default function Admin() {
                     <tr><td colSpan={5} className="p-4 text-gray-500">No memberships.</td></tr>
                   )}
                   {memberships.map(m => {
-                    // If cancelled AND has a refund, show "Cancelled + Refund" in the dropdown
                     const dropdownValue =
                       m.status === 'cancelled' && m.has_refund
                         ? 'cancelled_refund'
@@ -819,6 +909,7 @@ export default function Admin() {
           onRemoved={() => {
             setUsers(list => list.filter(x => x.id !== removeUser.id));
             setRemoveUser(null);
+            loadStatsOnly();
           }}
         />
       )}
