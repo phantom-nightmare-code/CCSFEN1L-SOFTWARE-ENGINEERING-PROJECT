@@ -10,6 +10,7 @@ import ExerciseLibrary from '../components/admin/ExerciseLibrary';
 import RevenueChart from '../components/admin/RevenueChart';
 import UserDetailModal from '../components/admin/UserDetailModal';
 import CoachManagement from '../components/admin/CoachManagement';
+import CoachRatingsManager from '../components/admin/CoachRatingsManager';
 import AuditLog from '../components/admin/AuditLog';
 import RemoveUserModal from '../components/admin/RemoveUserModal';
 import ClearPaymentsModal from '../components/admin/ClearPaymentsModal';
@@ -21,6 +22,7 @@ export default function Admin() {
   const { showToast } = useToast();
 
   const [tab, setTab] = useState('profile');
+  const [coachSubTab, setCoachSubTab] = useState('manage');
   const [range, setRange] = useState(30);
   const [stats, setStats] = useState(null);
   const [aggregate, setAggregate] = useState(null);
@@ -899,7 +901,37 @@ export default function Admin() {
         </div>
       )}
 
-      {tab === 'coaches' && <CoachManagement />}
+      {/* ==================== COACHES ==================== */}
+      {tab === 'coaches' && (
+        <div className="space-y-4">
+          <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800">
+            <button
+              onClick={() => setCoachSubTab('manage')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+                coachSubTab === 'manage'
+                  ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Assign & Promote
+            </button>
+            <button
+              onClick={() => setCoachSubTab('ratings')}
+              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+                coachSubTab === 'ratings'
+                  ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+              }`}
+            >
+              Ratings
+            </button>
+          </div>
+
+          {coachSubTab === 'manage' && <CoachManagement />}
+          {coachSubTab === 'ratings' && <CoachRatingsManager />}
+        </div>
+      )}
+
       {tab === 'inventory' && <RentalInventory />}
       {tab === 'exercises' && <ExerciseLibrary />}
 
