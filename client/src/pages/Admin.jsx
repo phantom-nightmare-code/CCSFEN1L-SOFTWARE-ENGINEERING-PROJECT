@@ -12,6 +12,7 @@ import UserDetailModal from '../components/admin/UserDetailModal';
 import CoachManagement from '../components/admin/CoachManagement';
 import AuditLog from '../components/admin/AuditLog';
 import RemoveUserModal from '../components/admin/RemoveUserModal';
+import ClearPaymentsModal from '../components/admin/ClearPaymentsModal';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 
@@ -33,15 +34,13 @@ export default function Admin() {
   const [receipt, setReceipt] = useState(null);
   const [detailUser, setDetailUser] = useState(null);
   const [removeUser, setRemoveUser] = useState(null);
+  const [showClearModal, setShowClearModal] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState(null);
 
-  // Refs to always have the latest tab in the interval closure
   const tabRef = useRef(tab);
   useEffect(() => { tabRef.current = tab; }, [tab]);
-
-  /* ---------- Loaders ---------- */
 
   const loadAll = async (silent = false) => {
     if (!silent) setRefreshing(true);
@@ -86,13 +85,11 @@ export default function Admin() {
     api.get(`/admin/stats?range=${range}`).then(r => setStats(r.data));
   }, [range]);
 
-  // Initial load
   useEffect(() => {
     loadAll();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-refresh every 30 seconds — only aggregates + payments
   useEffect(() => {
     const interval = setInterval(() => {
       if (tabRef.current === 'profile' || tabRef.current === 'payments' || tabRef.current === 'pending') {
@@ -544,15 +541,24 @@ export default function Admin() {
       {/* ==================== PAYMENTS ==================== */}
       {tab === 'payments' && (
         <>
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
             <h2 className="text-xl font-semibold">All Payments</h2>
-            <button
-              onClick={loadStatsOnly}
-              className="text-xs text-brand-600 hover:underline flex items-center gap-1"
-            >
-              🔄 Refresh
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={loadStatsOnly}
+                className="text-xs text-brand-600 hover:underline flex items-center gap-1"
+              >
+                🔄 Refresh
+              </button>
+              <button
+                onClick={() => setShowClearModal(true)}
+                className="text-xs text-red-600 hover:underline flex items-center gap-1"
+              >
+                🗑 Clear All Payments
+              </button>
+            </div>
           </div>
+
           <div className="grid md:grid-cols-4 gap-4">
             <Card label="Total Payments" value={payments.length} />
             <Card label="Net Revenue"    value={`₱${totalRevenue.toFixed(2)}`} />
@@ -900,6 +906,16 @@ export default function Admin() {
       {receipt && <Receipt data={receipt} onClose={() => setReceipt(null)} />}
       {detailUser && (
         <UserDetailModal userId={detailUser} onClose={() => setDetailUser(null)} />
+      )}
+
+      {showClearModal && (
+        <ClearPaymentsModal
+          onClose={() => setShowClearModal(false)}
+          onCleared={() => {
+            setShowClearModal(false);
+            loadAll();
+          }}
+        />
       )}
 
       {removeUser && (
