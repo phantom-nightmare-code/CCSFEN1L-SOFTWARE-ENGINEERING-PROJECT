@@ -23,6 +23,7 @@ export default function Admin() {
 
   const [tab, setTab] = useState('profile');
   const [coachSubTab, setCoachSubTab] = useState('manage');
+  const [paymentsSubTab, setPaymentsSubTab] = useState('platform');
   const [range, setRange] = useState(30);
   const [stats, setStats] = useState(null);
   const [aggregate, setAggregate] = useState(null);
@@ -30,6 +31,7 @@ export default function Admin() {
   const [pendingDeletions, setPendingDeletions] = useState([]);
   const [activity, setActivity] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [coachPayments, setCoachPayments] = useState(null);
   const [memberships, setMemberships] = useState([]);
   const [rentals, setRentals] = useState([]);
   const [pendingPayments, setPendingPayments] = useState([]);
@@ -48,13 +50,14 @@ export default function Admin() {
   const loadAll = async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const [aggr, usr, act, pay, pend, del] = await Promise.all([
+      const [aggr, usr, act, pay, pend, del, cpay] = await Promise.all([
         api.get('/admin/stats/aggregate').then(r => r.data),
         api.get('/admin/users').then(r => r.data),
         api.get('/admin/activity?limit=100').then(r => r.data),
         api.get('/payments').then(r => r.data),
         api.get('/admin/payments/pending').then(r => r.data),
         api.get('/admin/users/pending-deletions').then(r => r.data).catch(() => []),
+        api.get('/admin/coach-payments').then(r => r.data).catch(() => null),
       ]);
       setAggregate(aggr);
       setUsers(usr);
@@ -62,6 +65,7 @@ export default function Admin() {
       setPayments(pay);
       setPendingPayments(pend);
       setPendingDeletions(del);
+      setCoachPayments(cpay);
       setLastRefreshed(new Date());
     } catch (err) {
       console.error('Admin load failed:', err.message);
@@ -70,16 +74,18 @@ export default function Admin() {
 
   const loadStatsOnly = async () => {
     try {
-      const [aggr, pay, pend, del] = await Promise.all([
+      const [aggr, pay, pend, del, cpay] = await Promise.all([
         api.get('/admin/stats/aggregate').then(r => r.data),
         api.get('/payments').then(r => r.data),
         api.get('/admin/payments/pending').then(r => r.data),
         api.get('/admin/users/pending-deletions').then(r => r.data).catch(() => []),
+        api.get('/admin/coach-payments').then(r => r.data).catch(() => null),
       ]);
       setAggregate(aggr);
       setPayments(pay);
       setPendingPayments(pend);
       setPendingDeletions(del);
+      setCoachPayments(cpay);
       setLastRefreshed(new Date());
     } catch (err) { console.error(err); }
   };
@@ -215,6 +221,24 @@ export default function Admin() {
     });
   };
 
+  const openCoachPaymentReceipt = (p) => {
+    setReceipt({
+      title: 'Coach Payment',
+      amount: p.amount,
+      method: p.method,
+      reference: p.reference,
+      date: p.created_at,
+      items: [
+        { label: 'Member', value: p.member_name || p.member_email },
+        { label: 'Coach', value: p.coach_name || p.coach_email },
+        { label: 'Rate', value: `₱${Number(p.rate).toFixed(2)}/hr` },
+        { label: 'Hours', value: p.hours },
+        { label: 'Status', value: p.status },
+        ...(p.session_date ? [{ label: 'Session', value: p.session_date.slice(0, 10) }] : []),
+      ],
+    });
+  };
+
   const totalRevenue = payments.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount || 0), 0);
   const refundedTotal = payments.filter(p => p.status === 'refunded').reduce((s, p) => s + Number(p.amount || 0), 0);
   const filteredUser = filterUser ? userMap[filterUser] : null;
@@ -263,10 +287,11 @@ export default function Admin() {
         </div>
       </div>
 
-      <div className="flex items-center gap-2 flex-wrap border-b border-gray-200 dark:border-gray-800">
+      {/* Compact tab bar — one row */}
+      <div className="flex items-center gap-1 flex-wrap border-b border-gray-200 dark:border-gray-800">
         {TABS.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+            className={`px-2.5 py-1.5 text-xs font-medium border-b-2 transition whitespace-nowrap ${
               tab === t.id ? 'border-brand-600 text-brand-600'
               : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
             }`}>
@@ -410,20 +435,15 @@ export default function Admin() {
       {/* DELETIONS */}
       {tab === 'deletions' && (
         <div className="space-y-4">
-          <h2 className="text-xl font-semibold">
-            Scheduled for Deletion ({pendingDeletions.length})
-          </h2>
+          <h2 className="text-xl font-semibold">Scheduled for Deletion ({pendingDeletions.length})</h2>
           <p className="text-xs text-gray-500">
-            These users were emailed a revocation link. If they click it, deletion is cancelled.
-            Otherwise, force-delete them after the deadline.
+            Users received an email with a revocation link. If they don't revoke, force-delete them after the deadline.
           </p>
-
           {pendingDeletions.length === 0 && (
             <p className="p-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 text-gray-500">
               No pending deletions. 🎉
             </p>
           )}
-
           {pendingDeletions.map(d => {
             const deadline = new Date(d.pending_deletion_at);
             const daysLeft = Math.ceil((deadline - new Date()) / 86400000);
@@ -486,58 +506,179 @@ export default function Admin() {
 
       {/* PAYMENTS */}
       {tab === 'payments' && (
-        <>
+        <div className="space-y-6">
           <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
-            <h2 className="text-xl font-semibold">All Payments</h2>
+            <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800">
+              <button onClick={() => setPaymentsSubTab('platform')}
+                className={`px-3 py-1.5 text-sm font-medium border-b-2 transition ${
+                  paymentsSubTab === 'platform' ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}>
+                Platform Payments
+              </button>
+              <button onClick={() => setPaymentsSubTab('coach')}
+                className={`px-3 py-1.5 text-sm font-medium border-b-2 transition ${
+                  paymentsSubTab === 'coach' ? 'border-brand-600 text-brand-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                }`}>
+                Coach Payments
+              </button>
+            </div>
             <div className="flex items-center gap-3">
               <button onClick={loadStatsOnly} className="text-xs text-brand-600 hover:underline">🔄 Refresh</button>
-              <button onClick={() => setShowClearModal(true)} className="text-xs text-red-600 hover:underline">🗑 Clear All Payments</button>
+              {paymentsSubTab === 'platform' && (
+                <button onClick={() => setShowClearModal(true)} className="text-xs text-red-600 hover:underline">🗑 Clear All Payments</button>
+              )}
             </div>
           </div>
-          <div className="grid md:grid-cols-4 gap-4">
-            <Card label="Total Payments" value={payments.length} />
-            <Card label="Net Revenue"    value={`₱${totalRevenue.toFixed(2)}`} />
-            <Card label="Refunded"       value={`₱${refundedTotal.toFixed(2)}`} />
-            <Card label="Unique Users"   value={new Set(payments.map(p => p.userId)).size} />
-          </div>
-          <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b border-gray-100 dark:border-gray-800">
-                  <th className="p-3">User</th><th>Amount</th><th>Method</th><th>Purpose</th><th>Status</th><th>Date</th><th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {payments.length === 0 && <tr><td colSpan={7} className="p-4 text-gray-500">No payments yet.</td></tr>}
-                {payments.map(p => (
-                  <tr key={p._id} className="border-b border-gray-100 dark:border-gray-800">
-                    <td className="p-3">
-                      <button onClick={() => setDetailUser(p.userId)} className="text-left hover:text-brand-600 hover:underline">
-                        <div className="font-medium">{displayName(userMap[p.userId] || { id: p.userId })}</div>
-                        <div className="text-xs text-gray-500">#{p.userId}</div>
-                      </button>
-                    </td>
-                    <td className="font-medium">₱{Number(p.amount).toFixed(2)}</td>
-                    <td className="uppercase text-xs">{p.method}</td>
-                    <td className="capitalize">{p.purpose}</td>
-                    <td>
-                      <span className={`px-2 py-0.5 rounded text-xs ${
-                        p.status === 'paid' ? 'bg-green-100 text-green-700'
-                        : p.status === 'refunded' ? 'bg-red-100 text-red-700'
-                        : p.status === 'pending' ? 'bg-yellow-100 text-yellow-700'
-                        : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                      }`}>{p.status}</span>
-                    </td>
-                    <td className="text-gray-500">{new Date(p.createdAt).toLocaleString()}</td>
-                    <td className="text-right pr-3">
-                      <button onClick={() => openPaymentReceipt(p)} className="text-xs text-brand-600 hover:underline">View</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
+
+          {/* PLATFORM PAYMENTS */}
+          {paymentsSubTab === 'platform' && (
+            <>
+              <div className="grid md:grid-cols-4 gap-4">
+                <Card label="Total Payments" value={payments.length} />
+                <Card label="Net Revenue"    value={`₱${totalRevenue.toFixed(2)}`} />
+                <Card label="Refunded"       value={`₱${refundedTotal.toFixed(2)}`} />
+                <Card label="Unique Users"   value={new Set(payments.map(p => p.userId)).size} />
+              </div>
+              <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left border-b border-gray-100 dark:border-gray-800">
+                      <th className="p-3">User</th><th>Amount</th><th>Method</th><th>Purpose</th><th>Status</th><th>Date</th><th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.length === 0 && <tr><td colSpan={7} className="p-4 text-gray-500">No payments yet.</td></tr>}
+                    {payments.map(p => (
+                      <tr key={p._id} className="border-b border-gray-100 dark:border-gray-800">
+                        <td className="p-3">
+                          <button onClick={() => setDetailUser(p.userId)} className="text-left hover:text-brand-600 hover:underline">
+                            <div className="font-medium">{displayName(userMap[p.userId] || { id: p.userId })}</div>
+                            <div className="text-xs text-gray-500">#{p.userId}</div>
+                          </button>
+                        </td>
+                        <td className="font-medium">₱{Number(p.amount).toFixed(2)}</td>
+                        <td className="uppercase text-xs">{p.method}</td>
+                        <td className="capitalize">{p.purpose}</td>
+                        <td>
+                          <span className={`px-2 py-0.5 rounded text-xs ${
+                            p.status === 'paid' ? 'bg-green-100 text-green-700'
+                            : p.status === 'refunded' ? 'bg-red-100 text-red-700'
+                            : p.status === 'pending' ? 'bg-yellow-100 text-yellow-700'
+                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+                          }`}>{p.status}</span>
+                        </td>
+                        <td className="text-gray-500">{new Date(p.createdAt).toLocaleString()}</td>
+                        <td className="text-right pr-3">
+                          <button onClick={() => openPaymentReceipt(p)} className="text-xs text-brand-600 hover:underline">View</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+
+          {/* COACH PAYMENTS */}
+          {paymentsSubTab === 'coach' && coachPayments && (
+            <>
+              <div className="grid md:grid-cols-4 gap-4">
+                <Card label="Total Transactions" value={coachPayments.stats.totalCount} />
+                <Card label="Total Paid to Coaches" value={`₱${coachPayments.stats.totalPaid.toFixed(2)}`} />
+                <Card label="Pending Verification"  value={`₱${coachPayments.stats.totalPending.toFixed(2)}`} />
+                <Card label="Active Coaches Paid"   value={coachPayments.stats.uniqueCoaches} />
+              </div>
+
+              {/* Per-coach breakdown */}
+              {coachPayments.byCoach.length > 0 && (
+                <section>
+                  <h3 className="text-lg font-semibold mb-2">Earnings by Coach</h3>
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {coachPayments.byCoach.map(c => (
+                      <div key={c.coach_id}
+                        className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+                        <div className="font-semibold truncate">{c.coach_name}</div>
+                        <div className="text-xs text-gray-500 truncate">{c.coach_email}</div>
+                        <div className="flex justify-between mt-3 text-sm">
+                          <span className="text-gray-500">Earned</span>
+                          <span className="font-bold text-green-600">₱{c.earned.toFixed(2)}</span>
+                        </div>
+                        {c.pending > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-gray-500">Pending</span>
+                            <span className="font-medium text-yellow-600">₱{c.pending.toFixed(2)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between text-xs text-gray-500 mt-1">
+                          <span>Sessions</span>
+                          <span>{c.count}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Full transaction table */}
+              <section>
+                <h3 className="text-lg font-semibold mb-2">
+                  All Coach Payments ({coachPayments.payments.length})
+                </h3>
+                <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left border-b border-gray-100 dark:border-gray-800">
+                        <th className="p-3">Member</th>
+                        <th>Coach</th>
+                        <th>Amount</th>
+                        <th>Rate / Hours</th>
+                        <th>Method</th>
+                        <th>Status</th>
+                        <th>Date</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {coachPayments.payments.length === 0 && (
+                        <tr><td colSpan={8} className="p-4 text-gray-500">No coach payments yet.</td></tr>
+                      )}
+                      {coachPayments.payments.map(p => (
+                        <tr key={p.id} className="border-b border-gray-100 dark:border-gray-800">
+                          <td className="p-3">
+                            <div className="font-medium">{p.member_name || p.member_username || p.member_email}</div>
+                            <div className="text-xs text-gray-500">#{p.member_id}</div>
+                          </td>
+                          <td>
+                            <div className="font-medium">{p.coach_name || p.coach_username || p.coach_email}</div>
+                            <div className="text-xs text-gray-500">#{p.coach_id}</div>
+                          </td>
+                          <td className="font-medium">₱{Number(p.amount).toFixed(2)}</td>
+                          <td className="text-xs text-gray-500">
+                            ₱{Number(p.rate).toFixed(2)} × {p.hours} hr
+                          </td>
+                          <td className="uppercase text-xs">{p.method}</td>
+                          <td>
+                            <span className={`px-2 py-0.5 rounded text-xs ${
+                              p.status === 'paid' ? 'bg-green-100 text-green-700'
+                              : p.status === 'pending' ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-red-100 text-red-700'
+                            }`}>{p.status}</span>
+                          </td>
+                          <td className="text-gray-500">{new Date(p.created_at).toLocaleString()}</td>
+                          <td className="text-right pr-3">
+                            <button onClick={() => openCoachPaymentReceipt(p)} className="text-xs text-brand-600 hover:underline">View</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </>
+          )}
+        </div>
       )}
 
       {/* PENDING */}
@@ -709,12 +850,12 @@ export default function Admin() {
         <div className="space-y-4">
           <div className="flex gap-2 border-b border-gray-200 dark:border-gray-800">
             <button onClick={() => setCoachSubTab('manage')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+              className={`px-3 py-1.5 text-sm font-medium border-b-2 transition ${
                 coachSubTab === 'manage' ? 'border-brand-600 text-brand-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}>Assign & Promote</button>
             <button onClick={() => setCoachSubTab('ratings')}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition ${
+              className={`px-3 py-1.5 text-sm font-medium border-b-2 transition ${
                 coachSubTab === 'ratings' ? 'border-brand-600 text-brand-600'
                 : 'border-transparent text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
               }`}>Ratings</button>
