@@ -193,7 +193,9 @@ router.post('/login', async (req, res, next) => {
       return res.status(400).json({ error: 'Email and password are required' });
 
     const [rows] = await pool.query(
-      'SELECT id, email, password_hash, role, full_name, email_verified FROM users WHERE email = ?',
+      `SELECT id, email, password_hash, role, full_name, email_verified,
+              pending_deletion_at
+       FROM users WHERE email = ?`,
       [email]
     );
     if (!rows.length) return res.status(401).json({ error: 'Invalid credentials' });
@@ -213,10 +215,36 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    const user = { id: u.id, email: u.email, role: u.role, full_name: u.full_name };
+    // Pending deletion check
+    if (u.pending_deletion_at) {
+      const deadline = new Date(u.pending_deletion_at);
+      if (deadline < new Date()) {
+        // Deadline passed — delete the account now
+        await pool.query('DELETE FROM users WHERE id = ?', [u.id]);
+        return res.status(403).json({
+          error: 'Your account has been permanently deleted.',
+        });
+      }
+      // Still within grace period — allow login and warn
+    }
+
+    const user = {
+      id: u.id,
+      email: u.email,
+      role: u.role,
+      full_name: u.full_name,
+      pendingDeletion: u.pending_deletion_at || null,
+    };
+
     await logActivity({ userId: user.id, action: 'login', req });
 
-    res.json({ token: signToken(user), user });
+    res.json({
+      token: signToken(user),
+      user,
+      warning: u.pending_deletion_at
+        ? `Your account is scheduled for deletion on ${new Date(u.pending_deletion_at).toLocaleDateString()}. Check your email to revoke.`
+        : null,
+    });
   } catch (err) { next(err); }
 });
 
@@ -224,7 +252,8 @@ router.post('/login', async (req, res, next) => {
 router.get('/me', authenticate, async (req, res, next) => {
   try {
     const [rows] = await pool.query(
-      `SELECT id, email, role, full_name, username, created_at, birthday, email_verified
+      `SELECT id, email, role, full_name, username, created_at, birthday,
+              email_verified, pending_deletion_at
        FROM users WHERE id = ?`,
       [req.user.id]
     );
@@ -264,7 +293,8 @@ router.patch('/me', authenticate, async (req, res, next) => {
     await pool.query(`UPDATE users SET ${fields.join(', ')} WHERE id = ?`, params);
 
     const [rows] = await pool.query(
-      `SELECT id, email, role, full_name, username, created_at, birthday, email_verified
+      `SELECT id, email, role, full_name, username, created_at, birthday,
+              email_verified, pending_deletion_at
        FROM users WHERE id = ?`,
       [req.user.id]
     );
