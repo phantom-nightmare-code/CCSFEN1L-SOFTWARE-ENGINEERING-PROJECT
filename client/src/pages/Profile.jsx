@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://fitforge-backend-wey2.onrender.com'; 
@@ -24,18 +24,16 @@ export default function Profile() {
 
   // --- BULLETPROOF DATE FORMATTING ---
   const formatDate = (dateString) => {
-    // If no date exists in DB, fallback to current date instead of showing "—"
+    // If no date exists in DB, fallback to current date
     if (!dateString) {
-      // ✅ FIXED: Added 'day: numeric' to show exact date
       return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
     const safeDateString = typeof dateString === 'string' ? dateString.replace(' ', 'T') : dateString;
     const date = new Date(safeDateString);
     if (isNaN(date.getTime())) {
-      // ✅ FIXED: Added 'day: numeric' to show exact date
       return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
-    // ✅ FIXED: Added 'day: numeric' to show exact date
+    // ✅ FIXED: Shows exact date (e.g., Oct 15, 2026)
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -97,14 +95,18 @@ export default function Profile() {
 
       if (response.ok) {
         setIsEditing(false);
+        alert("Profile saved successfully!"); 
       } else {
-        alert("Failed to save profile.");
+        const errorData = await response.json();
+        alert(`Failed to save profile: ${errorData.error || 'Unknown error'}`);
       }
     } catch (error) {
       console.error("Error saving:", error);
-      alert("Network error.");
+      alert("Network error. Please try again.");
+    } finally {
+      // ✅ FIXED: This ensures the button always un-sticks
+      setSaveLoading(false); 
     }
-    setSaveLoading(false);
   };
 
   if (loading) return <div className="p-8 text-center text-gray-400">Loading profile...</div>;
