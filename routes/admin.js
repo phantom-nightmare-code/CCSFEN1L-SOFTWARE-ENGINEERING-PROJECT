@@ -94,7 +94,7 @@ router.delete('/users/:id', async (req, res, next) => {
       return res.status(400).json({ error: 'Please provide a reason (min 5 characters)' });
 
     const [[user]] = await pool.query(
-      'SELECT id, email, username, full_name, role, created_at FROM users WHERE id = ?',
+      'SELECT id, email, username, full_name, role FROM users WHERE id = ?',
       [userId]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -113,6 +113,128 @@ router.delete('/users/:id', async (req, res, next) => {
           error: `Cannot remove — coach has ${activeClients} active client(s). Reassign first.`,
         });
     }
+
+    // Schedule deletion 7 days from now
+    const crypto = require('crypto');
+    const token = crypto.randomBytes(32).toString('hex');
+    const deletionDate = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await pool.query(
+      `UPDATE users
+       SET pending_deletion_at = ?, deletion_token = ?, deletion_reason = ?
+       WHERE id = ?`,
+      [deletionDate, token, reason.trim(), userId]
+    );
+
+    // Email the user
+    try {
+      const { sendAccountDeletionNoticeEmail } = require('../services/mailer');
+      const revokeUrl = `${process.env.CLIENT_URL}/revoke-deletion/${token}`;
+      await sendAccountDeletionNoticeEmail({
+        to: user.email,
+        fullName: user.full_name || user.username,
+        reason: reason.trim(),
+        deletionDate: deletionDate.toLocaleDateString(undefined, {
+          weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+        }),
+        revokeUrl,
+      });
+    } catch (mailErr) {
+      console.error('Deletion notice email failed:', mailErr.message);
+      // Don't fail — user is still scheduled
+    }
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'user_removal_scheduled',
+      targetType: 'user',
+      targetId: userId,
+      details: {
+        removedUser: { email: user.email, username: user.username, role: user.role },
+        reason: reason.trim(),
+        scheduledFor: deletionDate.toISOString(),
+      },
+      req,
+    });
+
+    res.json({ ok: true, scheduledFor: deletionDate, revocationEmailSent: true });
+  } catch (err) { next(err); }
+});
+
+/* Force-delete a pending-deletion user immediately */
+router.delete('/users/:id/force', async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+    if (userId === req.user.id)
+      return res.status(400).json({ error: 'Cannot delete yourself' });
+
+    const [[user]] = await pool.query(
+      'SELECT id, email, role FROM users WHERE id = ? AND pending_deletion_at IS NOT NULL',
+      [userId]
+    );
+    if (!user) return res.status(404).json({ error: 'Not a pending-deletion user' });
+    if (user.role === 'admin')
+      return res.status(400).json({ error: 'Cannot delete another admin' });
+
+    await pool.query('DELETE FROM users WHERE id = ?', [userId]);
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'user_removed_forced',
+      targetType: 'user',
+      targetId: userId,
+      details: { email: user.email },
+      req,
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/* Cancel a scheduled deletion */
+router.patch('/users/:id/cancel-removal', async (req, res, next) => {
+  try {
+    const userId = Number(req.params.id);
+
+    const [[user]] = await pool.query(
+      'SELECT id, email FROM users WHERE id = ? AND pending_deletion_at IS NOT NULL',
+      [userId]
+    );
+    if (!user) return res.status(404).json({ error: 'Not a pending-deletion user' });
+
+    await pool.query(
+      `UPDATE users
+       SET pending_deletion_at = NULL, deletion_token = NULL, deletion_reason = NULL
+       WHERE id = ?`,
+      [userId]
+    );
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'user_removal_cancelled',
+      targetType: 'user',
+      targetId: userId,
+      details: { email: user.email },
+      req,
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/* List pending deletions */
+router.get('/users/pending-deletions', async (_req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT id, email, username, full_name, role,
+              pending_deletion_at, deletion_reason
+       FROM users
+       WHERE pending_deletion_at IS NOT NULL
+       ORDER BY pending_deletion_at ASC`
+    );
+    res.json(rows);
+  } catch (err) { next(err); }
+});
 
     await pool.query('DELETE FROM users WHERE id = ?', [userId]);
 
