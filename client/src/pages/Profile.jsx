@@ -2,33 +2,40 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
 
+// Replace this with your actual backend URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'; 
 
 export default function Profile() {
-  const { user, isAdmin, token } = useAuth(); 
+  const { user, setUser, isAdmin, token } = useAuth(); // Added setUser in case you want to update local state
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   
-  // Coach specific state
+  // State for profile details
   const [coachDetails, setCoachDetails] = useState({
     experience_years: 0,
     expertise: '',
     created_at: null
   });
+  
   const [isEditing, setIsEditing] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
 
   const isCoach = user?.role === 'coach';
 
-  // Format date helper
+  // --- DATE FORMATTING HELPER ---
   const formatDate = (dateString) => {
     if (!dateString) return '—';
+    
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '—'; // Check for invalid dates
+    
+    // Returns format like "Oct 2023"
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
+  // --- FETCH DATA FROM BACKEND ---
   useEffect(() => {
     if (!user) {
       navigate('/login');
@@ -38,17 +45,18 @@ export default function Profile() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // Fetch user and coach details from your MySQL backend
         const response = await fetch(`${API_URL}/api/users/${user.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
         if (response.ok) {
           const data = await response.json();
+          
           setCoachDetails({
             experience_years: data.experience_years || 0,
             expertise: data.expertise || '',
-            created_at: data.created_at // Assuming your MySQL users table has created_at
+            // Handles both snake_case (MySQL default) and camelCase (Sequelize/Prisma)
+            created_at: data.created_at || data.createdAt || null
           });
         }
       } catch (error) {
@@ -60,6 +68,7 @@ export default function Profile() {
     fetchData();
   }, [user, navigate, token]);
 
+  // --- SAVE PROFILE CHANGES ---
   const handleSaveProfile = async () => {
     setSaveLoading(true);
     try {
@@ -69,7 +78,11 @@ export default function Profile() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(coachDetails)
+        body: JSON.stringify({
+          full_name: user.full_name,
+          experience_years: coachDetails.experience_years,
+          expertise: coachDetails.expertise
+        })
       });
 
       if (response.ok) {
@@ -87,7 +100,6 @@ export default function Profile() {
   if (loading) return <div className="p-8 text-center text-gray-400">Loading profile...</div>;
   if (!user) return null;
 
-  // Determine which tabs to show based on role
   const tabs = isCoach ? ['overview'] : ['overview', 'transactions', 'memberships', 'rentals'];
 
   return (
@@ -125,6 +137,7 @@ export default function Profile() {
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Status</p>
               <p className="text-blue-400 font-bold text-2xl">Active</p>
             </div>
+            {/* 👇 THIS IS THE MEMBER SINCE CARD 👇 */}
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Member Since</p>
               <p className="text-gray-200 font-bold text-2xl">{formatDate(coachDetails.created_at)}</p>
