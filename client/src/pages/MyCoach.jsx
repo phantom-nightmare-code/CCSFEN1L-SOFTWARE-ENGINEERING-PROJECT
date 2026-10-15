@@ -2,17 +2,23 @@ import { useEffect, useState } from 'react';
 import api from '../api';
 import { useToast } from '../context/ToastContext';
 import FeedbackThread from '../components/FeedbackThread';
+import CoachPaymentModal from '../components/CoachPaymentModal';
+import CoachPaymentReceipt from '../components/CoachPaymentReceipt';
 
 export default function MyCoach() {
   const { showToast } = useToast();
   const [coaches, setCoaches] = useState([]);
   const [feedback, setFeedback] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [unread, setUnread] = useState(0);
   const [pendingRequests, setPendingRequests] = useState([]);
+  const [availableCoaches, setAvailableCoaches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [requestMessage, setRequestMessage] = useState('');
   const [requesting, setRequesting] = useState(false);
+  const [payingCoach, setPayingCoach] = useState(null);
+  const [viewingReceipt, setViewingReceipt] = useState(null);
 
   const load = () => {
     return Promise.all([
@@ -22,6 +28,8 @@ export default function MyCoach() {
         setPendingRequests(r.data.pendingRequests || []);
       }),
       api.get('/my-coach/feedback').then(r => setFeedback(r.data || [])),
+      api.get('/coach-payments/me').then(r => setPayments(r.data || [])).catch(() => {}),
+      api.get('/coach-payments/available').then(r => setAvailableCoaches(r.data || [])).catch(() => {}),
     ]);
   };
 
@@ -63,11 +71,23 @@ export default function MyCoach() {
   };
 
   const updateFeedback = (updated) => {
-    if (updated._deleted) {
-      setFeedback(list => list.filter(f => f.id !== updated.id));
-    } else {
-      setFeedback(list => list.map(f => f.id === updated.id ? updated : f));
-    }
+    if (updated._deleted) setFeedback(list => list.filter(f => f.id !== updated.id));
+    else setFeedback(list => list.map(f => f.id === updated.id ? updated : f));
+  };
+
+  const openReceipt = (p) => {
+    setViewingReceipt({
+      reference: p.reference,
+      amount: Number(p.amount),
+      rate: Number(p.rate),
+      hours: Number(p.hours),
+      method: p.method,
+      coachName: p.coach_name,
+      memberName: 'You',
+      sessionDate: p.session_date?.slice(0, 10),
+      notes: p.notes,
+      date: p.created_at,
+    });
   };
 
   if (loading) return <div className="p-8 text-center text-gray-500">Loading…</div>;
@@ -76,7 +96,7 @@ export default function MyCoach() {
   const hasPending = pendingRequests.length > 0;
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-6">
+    <div className="max-w-5xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <h1 className="text-3xl font-bold">My Coach</h1>
         <div className="flex items-center gap-3">
@@ -95,6 +115,45 @@ export default function MyCoach() {
           )}
         </div>
       </div>
+
+      {availableCoaches.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">Available Coaches</h2>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {availableCoaches.map(c => (
+              <div key={c.id}
+                className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-200 flex items-center justify-center font-bold shrink-0">
+                    {(c.full_name?.[0] || '?').toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-semibold truncate">{c.full_name}</div>
+                    <div className="text-xs text-gray-500">
+                      {c.avg_rating ? (
+                        <>
+                          {'⭐'.repeat(Math.round(Number(c.avg_rating)))}
+                          <span className="ml-1">
+                            {c.avg_rating} ({c.review_count})
+                          </span>
+                        </>
+                      ) : (
+                        <span className="text-gray-400">No ratings yet</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Rate</span>
+                  <span className="font-medium">
+                    {c.hourly_rate != null ? `₱${Number(c.hourly_rate).toFixed(2)}/hr` : '—'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {hasPending && (
         <section className="bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-900 rounded-xl p-4">
@@ -134,24 +193,92 @@ export default function MyCoach() {
           </p>
         ) : (
           <div className="grid md:grid-cols-2 gap-3">
-            {coaches.map(c => (
-              <div key={c.id}
-                className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 flex items-center gap-4">
-                <div className="w-12 h-12 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-200 flex items-center justify-center font-bold shrink-0">
-                  {(c.full_name?.[0] || c.email?.[0] || '?').toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-semibold truncate">{c.full_name || c.username || c.email}</div>
-                  <div className="text-xs text-gray-500 truncate">{c.email}</div>
-                  <div className="text-xs text-gray-400 mt-0.5">
-                    Assigned {new Date(c.assigned_at).toLocaleDateString()}
+            {coaches.map(c => {
+              const info = availableCoaches.find(x => x.id === c.id);
+              return (
+                <div key={c.id}
+                  className="p-4 bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-brand-100 dark:bg-brand-900 text-brand-700 dark:text-brand-200 flex items-center justify-center font-bold shrink-0">
+                      {(c.full_name?.[0] || c.email?.[0] || '?').toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold truncate">{c.full_name || c.username || c.email}</div>
+                      <div className="text-xs text-gray-500 truncate">{c.email}</div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        Assigned {new Date(c.assigned_at).toLocaleDateString()}
+                      </div>
+                    </div>
                   </div>
+
+                  <div className="flex items-center justify-between mt-3 text-sm">
+                    <div>
+                      {info?.avg_rating ? (
+                        <span>
+                          {'⭐'.repeat(Math.round(Number(info.avg_rating)))}{' '}
+                          <span className="text-xs text-gray-500">
+                            {info.avg_rating} ({info.review_count})
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">No ratings yet</span>
+                      )}
+                    </div>
+                    <div className="font-medium">
+                      {info?.hourly_rate != null
+                        ? `₱${Number(info.hourly_rate).toFixed(2)}/hr`
+                        : '—'}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setPayingCoach(info || { id: c.id, full_name: c.full_name, hourly_rate: null })}
+                    disabled={!info?.hourly_rate}
+                    className="w-full mt-3 bg-brand-600 text-white py-2 rounded text-sm hover:bg-brand-700 disabled:opacity-40"
+                  >
+                    {info?.hourly_rate ? '💳 Pay Coach' : 'Rate not set'}
+                  </button>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
+
+      {payments.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-3">My Payments to Coach</h2>
+          <div className="bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 divide-y divide-gray-100 dark:divide-gray-800">
+            {payments.map(p => (
+              <button
+                key={p.id}
+                onClick={() => openReceipt(p)}
+                className="w-full p-4 flex justify-between items-center text-left hover:bg-gray-50 dark:hover:bg-gray-800"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">💳</span>
+                  <div>
+                    <div className="font-medium">
+                      Paid {p.coach_name || p.coach_username}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {Number(p.hours)} hr × ₱{Number(p.rate).toFixed(2)} · {p.method?.toUpperCase()}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-bold text-green-600">
+                    ₱{Number(p.amount).toFixed(2)}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(p.created_at).toLocaleDateString()} ›
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
 
       <section>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -162,7 +289,6 @@ export default function MyCoach() {
             </span>
           )}
         </h2>
-
         <div className="space-y-3">
           {feedback.length === 0 && (
             <p className="text-sm text-gray-500 bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
@@ -212,6 +338,22 @@ export default function MyCoach() {
             </div>
           </div>
         </div>
+      )}
+
+      {payingCoach && (
+        <CoachPaymentModal
+          coach={payingCoach}
+          onClose={() => setPayingCoach(null)}
+          onPaid={() => { setPayingCoach(null); load(); }}
+        />
+      )}
+
+      {viewingReceipt && (
+        <CoachPaymentReceipt
+          data={viewingReceipt}
+          perspective="member"
+          onClose={() => setViewingReceipt(null)}
+        />
       )}
     </div>
   );
