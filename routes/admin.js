@@ -146,7 +146,6 @@ router.delete('/users/:id', async (req, res, next) => {
       });
     } catch (mailErr) {
       console.error('Deletion notice email failed:', mailErr.message);
-      // Don't fail — user is still scheduled
     }
 
     await logAdminAction({
@@ -166,7 +165,6 @@ router.delete('/users/:id', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* Force-delete a pending-deletion user immediately */
 router.delete('/users/:id/force', async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
@@ -196,7 +194,6 @@ router.delete('/users/:id/force', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* Cancel a scheduled deletion */
 router.patch('/users/:id/cancel-removal', async (req, res, next) => {
   try {
     const userId = Number(req.params.id);
@@ -227,7 +224,6 @@ router.patch('/users/:id/cancel-removal', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* List pending deletions */
 router.get('/users/pending-deletions', async (_req, res, next) => {
   try {
     const [rows] = await pool.query(
@@ -973,6 +969,61 @@ router.post('/payments/:id/resend-email', async (req, res, next) => {
     console.error('Admin resend failed:', err);
     res.status(500).json({ error: err.message || 'Send failed' });
   }
+});
+
+/* ============================================================
+   COACH PAYMENTS (admin view)
+   ============================================================ */
+
+router.get('/coach-payments', async (_req, res, next) => {
+  try {
+    const [rows] = await pool.query(
+      `SELECT cp.*,
+              m.full_name AS member_name, m.username AS member_username, m.email AS member_email,
+              c.full_name AS coach_name, c.username AS coach_username, c.email AS coach_email
+       FROM coach_payments cp
+       JOIN users m ON m.id = cp.member_id
+       JOIN users c ON c.id = cp.coach_id
+       ORDER BY cp.created_at DESC LIMIT 500`
+    );
+
+    const totalPaid = rows
+      .filter(r => r.status === 'paid')
+      .reduce((s, r) => s + Number(r.amount || 0), 0);
+
+    const totalPending = rows
+      .filter(r => r.status === 'pending')
+      .reduce((s, r) => s + Number(r.amount || 0), 0);
+
+    const byCoach = {};
+    rows.forEach(r => {
+      const key = r.coach_id;
+      if (!byCoach[key]) {
+        byCoach[key] = {
+          coach_id: r.coach_id,
+          coach_name: r.coach_name || r.coach_username || r.coach_email,
+          coach_email: r.coach_email,
+          earned: 0,
+          pending: 0,
+          count: 0,
+        };
+      }
+      if (r.status === 'paid')    byCoach[key].earned  += Number(r.amount || 0);
+      if (r.status === 'pending') byCoach[key].pending += Number(r.amount || 0);
+      byCoach[key].count += 1;
+    });
+
+    res.json({
+      payments: rows,
+      stats: {
+        totalPaid,
+        totalPending,
+        totalCount: rows.length,
+        uniqueCoaches: Object.keys(byCoach).length,
+      },
+      byCoach: Object.values(byCoach).sort((a, b) => b.earned - a.earned),
+    });
+  } catch (err) { next(err); }
 });
 
 /* ============================================================
