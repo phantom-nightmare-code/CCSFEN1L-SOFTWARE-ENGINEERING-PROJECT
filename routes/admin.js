@@ -286,7 +286,6 @@ router.get('/memberships', async (req, res, next) => {
     sql += ' ORDER BY m.created_at DESC LIMIT 500';
     const [rows] = await pool.query(sql, params);
 
-    // Determine which memberships have been refunded
     const ids = rows.map(r => r.id);
     let refundedSet = new Set();
     if (ids.length) {
@@ -331,12 +330,10 @@ router.patch('/memberships/:id/status', async (req, res, next) => {
       );
       paymentsRefunded = r.modifiedCount;
     } else if (status === 'active') {
-      // Un-refund refunded payments
       const r1 = await PaymentLog.updateMany(
         { purpose: 'membership', referenceId: id, status: 'refunded' },
         { $set: { status: 'paid' }, $unset: { refundedAt: '' } }
       );
-      // Flip pending/failed payments to paid
       const r2 = await PaymentLog.updateMany(
         {
           purpose: 'membership',
@@ -348,7 +345,6 @@ router.patch('/memberships/:id/status', async (req, res, next) => {
       paymentsRefunded = -r1.modifiedCount;
       paymentsActivated = r2.modifiedCount;
     } else if (status === 'pending') {
-      // Revert paid payments back to pending
       const r = await PaymentLog.updateMany(
         { purpose: 'membership', referenceId: id, status: 'paid' },
         { $set: { status: 'pending' }, $unset: { verifiedAt: '' } }
@@ -673,6 +669,41 @@ router.get('/payments/pending', async (_req, res, next) => {
       ...p,
       user: userMap[p.userId] || { id: p.userId, email: 'Unknown' },
     })));
+  } catch (err) { next(err); }
+});
+
+/* ============================================================
+   CLEAR ALL PAYMENTS (danger — permanent)
+   ============================================================ */
+router.delete('/payments/clear-all', async (req, res, next) => {
+  try {
+    const { confirmText } = req.body;
+
+    if (confirmText !== 'DELETE ALL PAYMENTS') {
+      return res.status(400).json({
+        error: 'Confirmation text does not match. Type "DELETE ALL PAYMENTS" exactly.',
+      });
+    }
+
+    const before = await PaymentLog.countDocuments();
+
+    const result = await PaymentLog.deleteMany({});
+    await AdminMetric.deleteMany({});
+
+    await logAdminAction({
+      adminId: req.user.id,
+      action: 'all_payments_cleared',
+      targetType: 'payment_logs',
+      targetId: 0,
+      details: { deletedCount: result.deletedCount, beforeCount: before },
+      req,
+    });
+
+    res.json({
+      ok: true,
+      deletedCount: result.deletedCount,
+      message: `Cleared ${result.deletedCount} payment records.`,
+    });
   } catch (err) { next(err); }
 });
 
