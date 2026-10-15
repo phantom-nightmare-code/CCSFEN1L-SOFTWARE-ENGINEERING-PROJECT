@@ -10,7 +10,7 @@ const router = express.Router();
 router.use(authenticate, requireAdmin);
 
 /* ============================================================
-   AGGREGATE STATS (across all users)
+   AGGREGATE STATS
    ============================================================ */
 
 router.get('/stats/aggregate', async (_req, res, next) => {
@@ -34,11 +34,8 @@ router.get('/stats/aggregate', async (_req, res, next) => {
     );
 
     res.json({
-      totalSpent,
-      totalRefunded,
-      totalTransactions,
-      activeRentals,
-      pendingPayments: pendingPaymentsCount,
+      totalSpent, totalRefunded, totalTransactions,
+      activeRentals, pendingPayments: pendingPaymentsCount,
     });
   } catch (err) { next(err); }
 });
@@ -358,10 +355,8 @@ router.patch('/memberships/:id/status', async (req, res, next) => {
       targetType: 'membership',
       targetId: id,
       details: {
-        from: existing.status,
-        to: dbStatus,
-        userId: existing.user_id,
-        paymentsActivated,
+        from: existing.status, to: dbStatus,
+        userId: existing.user_id, paymentsActivated,
       },
       req,
     });
@@ -673,7 +668,7 @@ router.get('/payments/pending', async (_req, res, next) => {
 });
 
 /* ============================================================
-   CLEAR ALL PAYMENTS (danger — permanent)
+   CLEAR ALL PAYMENTS
    ============================================================ */
 router.delete('/payments/clear-all', async (req, res, next) => {
   try {
@@ -879,8 +874,13 @@ router.get('/coaches', async (_req, res, next) => {
   try {
     const [rows] = await pool.query(
       `SELECT u.id, u.email, u.username, u.full_name, u.created_at,
+              u.coach_hourly_rate,
               (SELECT COUNT(*) FROM coach_clients
-               WHERE coach_id = u.id AND status = 'active') AS clientCount
+               WHERE coach_id = u.id AND status = 'active') AS clientCount,
+              (SELECT COALESCE(AVG(rating), 0) FROM coach_ratings
+               WHERE coach_id = u.id) AS avgRating,
+              (SELECT COUNT(*) FROM coach_ratings
+               WHERE coach_id = u.id) AS ratingCount
        FROM users u
        WHERE u.role = 'coach'
        ORDER BY u.full_name, u.email`
@@ -968,7 +968,6 @@ router.delete('/coach-assignments/:id', async (req, res, next) => {
    COACH RATINGS (admin management)
    ============================================================ */
 
-/* GET /api/admin/coaches/:id/ratings — list all ratings for a coach */
 router.get('/coaches/:id/ratings', async (req, res, next) => {
   try {
     const coachId = Number(req.params.id);
@@ -999,15 +998,11 @@ router.get('/coaches/:id/ratings', async (req, res, next) => {
     res.json({
       coach,
       ratings,
-      stats: {
-        avgRating: Number(stats.avgRating),
-        total: Number(stats.total),
-      },
+      stats: { avgRating: Number(stats.avgRating), total: Number(stats.total) },
     });
   } catch (err) { next(err); }
 });
 
-/* POST /api/admin/coaches/:id/ratings — admin adds a rating on behalf of a member */
 router.post('/coaches/:id/ratings', async (req, res, next) => {
   try {
     const coachId = Number(req.params.id);
@@ -1050,7 +1045,6 @@ router.post('/coaches/:id/ratings', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* PATCH /api/admin/coaches/:id/ratings/:ratingId — edit a rating */
 router.patch('/coaches/:id/ratings/:ratingId', async (req, res, next) => {
   try {
     const ratingId = Number(req.params.ratingId);
@@ -1092,7 +1086,6 @@ router.patch('/coaches/:id/ratings/:ratingId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* DELETE /api/admin/coaches/:id/ratings/:ratingId */
 router.delete('/coaches/:id/ratings/:ratingId', async (req, res, next) => {
   try {
     const ratingId = Number(req.params.ratingId);
