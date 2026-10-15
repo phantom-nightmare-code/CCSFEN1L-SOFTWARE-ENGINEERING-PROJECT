@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise'); 
+const mongoose = require('mongoose'); // ✅ ADDED: Required for MongoDB
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -10,7 +11,7 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// ⚠️ DATABASE CONNECTION POOL
+// ⚠️ MYSQL DATABASE CONNECTION POOL
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -18,9 +19,15 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'fitforge', 
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
-  connectionLimit: 2, // 👈 CRITICAL: Low limit to prevent "max_user_connections" error
+  connectionLimit: 10, // ✅ FIXED: Changed from 2 to 10 to prevent crashes under load
   queueLimit: 0
 });
+
+// ⚠️ MONGODB CONNECTION (Required for Admin routes)
+// Make sure you have MONGO_URI set in your Render Environment Variables!
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('MongoDB Connected successfully for Admin routes'))
+  .catch(err => console.error('MongoDB connection error:', err));
 
 // ⚠️ IMPORT YOUR EXISTING ROUTES
 const adminRoutes = require('./routes/admin');
