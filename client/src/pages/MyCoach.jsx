@@ -4,6 +4,7 @@ import { useToast } from '../context/ToastContext';
 import FeedbackThread from '../components/FeedbackThread';
 import CoachPaymentModal from '../components/CoachPaymentModal';
 import CoachPaymentReceipt from '../components/CoachPaymentReceipt';
+import CoachRatingModal from '../components/CoachRatingModal';
 
 export default function MyCoach() {
   const { showToast } = useToast();
@@ -19,6 +20,7 @@ export default function MyCoach() {
   const [requesting, setRequesting] = useState(false);
   const [payingCoach, setPayingCoach] = useState(null);
   const [viewingReceipt, setViewingReceipt] = useState(null);
+  const [ratingCoach, setRatingCoach] = useState(null);
 
   const load = () => {
     return Promise.all([
@@ -231,13 +233,24 @@ export default function MyCoach() {
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => setPayingCoach(info || { id: c.id, full_name: c.full_name, hourly_rate: null })}
-                    disabled={!info?.hourly_rate}
-                    className="w-full mt-3 bg-brand-600 text-white py-2 rounded text-sm hover:bg-brand-700 disabled:opacity-40"
-                  >
-                    {info?.hourly_rate ? '💳 Pay Coach' : 'Rate not set'}
-                  </button>
+                  <div className="grid grid-cols-2 gap-2 mt-3">
+                    <button
+                      onClick={() => setPayingCoach(info || { id: c.id, full_name: c.full_name, hourly_rate: null })}
+                      disabled={!info?.hourly_rate}
+                      className="bg-brand-600 text-white py-2 rounded text-sm hover:bg-brand-700 disabled:opacity-40"
+                    >
+                      {info?.hourly_rate ? '💳 Pay' : 'No rate'}
+                    </button>
+                    <button
+                      onClick={() => setRatingCoach({
+                        id: c.id,
+                        full_name: c.full_name || c.username || c.email,
+                      })}
+                      className="border border-yellow-400 text-yellow-600 dark:text-yellow-400 py-2 rounded text-sm hover:bg-yellow-50 dark:hover:bg-yellow-950/30"
+                    >
+                      ⭐ Rate
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -307,6 +320,7 @@ export default function MyCoach() {
         </div>
       </section>
 
+      {/* Modals */}
       {showRequestModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setShowRequestModal(false)}>
           <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-gray-100 dark:border-gray-800" onClick={e => e.stopPropagation()}>
@@ -345,6 +359,14 @@ export default function MyCoach() {
           coach={payingCoach}
           onClose={() => setPayingCoach(null)}
           onPaid={() => { setPayingCoach(null); load(); }}
+        />
+      )}
+
+      {ratingCoach && (
+        <CoachRatingModal
+          coach={ratingCoach}
+          onClose={() => setRatingCoach(null)}
+          onRated={() => { setRatingCoach(null); load(); }}
         />
       )}
 
