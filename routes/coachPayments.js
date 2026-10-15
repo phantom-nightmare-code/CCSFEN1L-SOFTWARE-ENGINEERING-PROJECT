@@ -1,14 +1,16 @@
 const express = require('express');
 const crypto = require('crypto');
+const QRCode = require('qrcode');
 const pool = require('../db/mysql');
 const { authenticate, requireCoach } = require('../middleware/auth');
 const { logActivity } = require('../services/activityLogger');
+const { sendCoachPaymentEmail } = require('../services/mailer');
 
 const router = express.Router();
 router.use(authenticate);
 
 /* ============================================================
-   PUBLIC COACHES (member sees these)
+   PUBLIC COACHES
    ============================================================ */
 
 router.get('/available', async (req, res, next) => {
@@ -24,7 +26,6 @@ router.get('/available', async (req, res, next) => {
        GROUP BY u.id
        ORDER BY avg_rating DESC, u.full_name`
     );
-
     res.json(coaches.map(c => ({
       id: c.id,
       full_name: c.full_name || c.username || c.email,
@@ -40,17 +41,14 @@ router.get('/available', async (req, res, next) => {
    MEMBER → RATE COACH
    ============================================================ */
 
-/* Create or update the member's rating for a coach */
 router.post('/rate', async (req, res, next) => {
   try {
     const { coachId, rating, review } = req.body;
     if (!coachId || !rating)
       return res.status(400).json({ error: 'coachId and rating required' });
-
     const ratingNum = Number(rating);
     if (isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5)
       return res.status(400).json({ error: 'Rating must be 1-5' });
-
     if (Number(coachId) === req.user.id)
       return res.status(400).json({ error: 'You cannot rate yourself' });
 
@@ -75,7 +73,6 @@ router.post('/rate', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* Get member's own rating for a coach */
 router.get('/my-rating/:coachId', async (req, res, next) => {
   try {
     const [[row]] = await pool.query(
@@ -87,7 +84,6 @@ router.get('/my-rating/:coachId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* Delete member's own rating */
 router.delete('/my-rating/:coachId', async (req, res, next) => {
   try {
     await pool.query(
@@ -98,7 +94,6 @@ router.delete('/my-rating/:coachId', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-/* Public: list ratings for a coach */
 router.get('/ratings/:coachId', async (req, res, next) => {
   try {
     const [rows] = await pool.query(
@@ -116,15 +111,18 @@ router.get('/ratings/:coachId', async (req, res, next) => {
 
 /* ============================================================
    MEMBER → PAY COACH
+   Cash/Card = instant paid. GCash/Maya/Bank = pending + QR email.
    ============================================================ */
 
 router.post('/', async (req, res, next) => {
   try {
     const { coachId, hours, method, session_date, notes } = req.body;
-    if (!coachId || !hours) return res.status(400).json({ error: 'coachId and hours required' });
+    if (!coachId || !hours)
+      return res.status(400).json({ error: 'coachId and hours required' });
 
     const hoursNum = Number(hours);
-    if (!hoursNum || hoursNum <= 0) return res.status(400).json({ error: 'Invalid hours' });
+    if (!hoursNum || hoursNum <= 0)
+      return res.status(400).json({ error: 'Invalid hours' });
 
     const [[coach]] = await pool.query(
       `SELECT id, full_name, username, email, coach_hourly_rate
@@ -137,30 +135,129 @@ router.post('/', async (req, res, next) => {
 
     const rate = Number(coach.coach_hourly_rate);
     const amount = rate * hoursNum;
+    const method_ = method || 'cash';
+    const needsVerification = ['gcash', 'maya', 'bank'].includes(method_);
 
     const reference = `COACH-${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
+    const verificationToken = needsVerification ? crypto.randomBytes(16).toString('hex') : null;
 
     const [result] = await pool.query(
       `INSERT INTO coach_payments
-        (member_id, coach_id, hours, rate, amount, method, status, session_date, notes, reference)
-       VALUES (?, ?, ?, ?, ?, ?, 'paid', ?, ?, ?)`,
-      [req.user.id, coachId, hoursNum, rate, amount,
-       method || 'cash', session_date || null, notes || null, reference]
+        (member_id, coach_id, hours, rate, amount, method, status, session_date, notes, reference, verification_token)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, coachId, hoursNum, rate, amount, method_,
+       needsVerification ? 'pending' : 'paid',
+       session_date || null, notes || null, reference, verificationToken]
     );
+
+    // QR + email for e-credit methods
+    let qrDataUrl = null;
+    if (needsVerification) {
+      try {
+        const receiptText = [
+          'FitForge Coach Payment',
+          `Reference: ${reference}`,
+          `Coach: ${coach.full_name || coach.username}`,
+          `Amount: PHP ${amount.toFixed(2)}`,
+          `Method: ${method_.toUpperCase()}`,
+          `Hours: ${hoursNum} × PHP ${rate.toFixed(2)}/hr`,
+          session_date ? `Session: ${session_date}` : '',
+        ].filter(Boolean).join('\n');
+
+        qrDataUrl = await QRCode.toDataURL(receiptText, {
+          width: 300, margin: 2,
+          color: { dark: '#000000', light: '#ffffff' },
+        });
+
+        const [memberRows] = await pool.query(
+          'SELECT email, full_name FROM users WHERE id = ?', [req.user.id]
+        );
+        if (memberRows.length) {
+          sendCoachPaymentEmail({
+            to: memberRows[0].email,
+            memberName: memberRows[0].full_name,
+            coachName: coach.full_name || coach.username,
+            reference, amount, rate, hours: hoursNum,
+            method: method_,
+            sessionDate: session_date || null,
+            notes: notes || null,
+            qrDataUrl,
+          }).catch(err => console.error('[coach-pay] Email failed:', err.message));
+        }
+      } catch (mailErr) {
+        console.error('Coach payment email failed:', mailErr.message);
+      }
+    }
 
     await logActivity({
       userId: req.user.id, action: 'coach_payment_made', req,
-      metadata: { coachId, hours: hoursNum, amount, method },
+      metadata: { coachId, hours: hoursNum, amount, method: method_, status: needsVerification ? 'pending' : 'paid' },
     });
 
     res.status(201).json({
       id: result.insertId,
       reference, amount, rate,
       hours: hoursNum,
+      status: needsVerification ? 'pending' : 'paid',
+      qrDataUrl,
       coach: { id: coach.id, name: coach.full_name || coach.username },
     });
   } catch (err) { next(err); }
 });
+
+/* Member confirms they sent the money */
+router.patch('/:id/confirm', async (req, res, next) => {
+  try {
+    const [result] = await pool.query(
+      `UPDATE coach_payments
+       SET user_confirmed_at = NOW()
+       WHERE id = ? AND member_id = ? AND status = 'pending' AND user_confirmed_at IS NULL`,
+      [req.params.id, req.user.id]
+    );
+    if (!result.affectedRows)
+      return res.status(400).json({ error: 'Already confirmed or not pending' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/* Coach marks the payment as received */
+router.patch('/:id/verify', requireCoach, async (req, res, next) => {
+  try {
+    const [result] = await pool.query(
+      `UPDATE coach_payments
+       SET status = 'paid', verified_at = NOW()
+       WHERE id = ? AND coach_id = ? AND status = 'pending'`,
+      [req.params.id, req.user.id]
+    );
+    if (!result.affectedRows)
+      return res.status(400).json({ error: 'Not pending or not yours' });
+
+    await logActivity({
+      userId: req.user.id, action: 'coach_payment_verified', req,
+      metadata: { paymentId: req.params.id },
+    });
+
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+router.patch('/:id/reject', requireCoach, async (req, res, next) => {
+  try {
+    const [result] = await pool.query(
+      `UPDATE coach_payments
+       SET status = 'refunded'
+       WHERE id = ? AND coach_id = ? AND status = 'pending'`,
+      [req.params.id, req.user.id]
+    );
+    if (!result.affectedRows)
+      return res.status(400).json({ error: 'Not pending or not yours' });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
+/* ============================================================
+   QUERIES
+   ============================================================ */
 
 router.get('/me', async (req, res, next) => {
   try {
@@ -196,7 +293,6 @@ router.patch('/my-rate', requireCoach, async (req, res, next) => {
   try {
     const { hourly_rate } = req.body;
     const rate = hourly_rate === '' || hourly_rate == null ? null : Number(hourly_rate);
-
     if (rate != null && (isNaN(rate) || rate < 0 || rate > 100000))
       return res.status(400).json({ error: 'Invalid hourly rate' });
 
