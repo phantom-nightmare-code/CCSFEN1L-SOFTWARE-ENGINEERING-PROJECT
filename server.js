@@ -1,77 +1,80 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const cookieParser = require('cookie-parser');
 
-const pool = require('./db/mysql');
-const connectMongo = require('./db/mongo');
+// ⚠️ STEP 1: IMPORT YOUR MYSQL CONNECTION
+// Make sure this path matches where your database connection file is located.
+// If your file is named something else (e.g., 'config/db.js'), change './db' to match.
+const db = require('./db'); 
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-/* ---------- CORS ---------- */
-const allowedOrigins = [
-  'http://localhost:5173',
-  'http://localhost:3000',
-  process.env.CLIENT_URL,
-].filter(Boolean);
-
-app.use(cors({
-  origin: (origin, cb) => {
-    // Allow no-origin requests (curl, mobile, Postman)
-    if (!origin) return cb(null, true);
-    if (allowedOrigins.includes(origin)) return cb(null, true);
-    console.warn(`[CORS] Blocked origin: ${origin}`);
-    return cb(null, false);
-  },
-  credentials: true,
-}));
-
+// ⚠️ STEP 2: MIDDLEWARE
+app.use(cors());
 app.use(express.json());
-app.use(cookieParser());
 
-/* ---------- DB connections ---------- */
-connectMongo();
+// ⚠️ STEP 3: IMPORT YOUR EXISTING ROUTES
+// These are the files from your routes folder screenshot
+const adminRoutes = require('./routes/admin');
+const analyticsRoutes = require('./routes/analytics');
+const authRoutes = require('./routes/auth');
+const coachPaymentsRoutes = require('./routes/coachPayments');
+const coachesRoutes = require('./routes/coaches');
+const exercisesRoutes = require('./routes/exercises');
+const membershipsRoutes = require('./routes/memberships');
+const myCoachRoutes = require('./routes/myCoach');
+const paymentsRoutes = require('./routes/payments');
+const recommendationsRoutes = require('./routes/recommendations');
+const rentalsRoutes = require('./routes/rentals');
+const revokeRoutes = require('./routes/revoke');
+const routinesRoutes = require('./routes/routines');
+const workoutsRoutes = require('./routes/workouts');
 
-pool.getConnection()
-  .then(c => {
-    console.log('✅ MySQL connected');
-    c.release();
-  })
-  .catch(err => {
-    console.error('❌ MySQL connection failed:', err.message);
-    process.exit(1);
-  });
+// ⚠️ STEP 4: MOUNT YOUR EXISTING ROUTES
+// Add any other routes you have here
+app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/auth', authRoutes);
+app.use('/api/coach-payments', coachPaymentsRoutes);
+app.use('/api/coaches', coachesRoutes);
+app.use('/api/exercises', exercisesRoutes);
+app.use('/api/memberships', membershipsRoutes);
+app.use('/api/my-coach', myCoachRoutes);
+app.use('/api/payments', paymentsRoutes);
+app.use('/api/recommendations', recommendationsRoutes);
+app.use('/api/rentals', rentalsRoutes);
+app.use('/api/revoke', revokeRoutes);
+app.use('/api/routines', routinesRoutes);
+app.use('/api/workouts', workoutsRoutes);
 
-/* ---------- Routes ---------- */
-app.use('/api/auth',            require('./routes/auth'));
-app.use('/api/admin',           require('./routes/admin'));
-app.use('/api/coaches',         require('./routes/coaches'));
-app.use('/api/my-coach',        require('./routes/myCoach'));
-app.use('/api/coach-payments',  require('./routes/coachPayments'));
-app.use('/api/revoke',          require('./routes/revoke'));
-app.use('/api/memberships',     require('./routes/memberships'));
-app.use('/api/payments',        require('./routes/payments'));
-app.use('/api/rentals',         require('./routes/rentals'));
-app.use('/api/recommendations', require('./routes/recommendations'));
-app.use('/api/routines',        require('./routes/routines'));
-app.use('/api/workouts',        require('./routes/workouts'));
-app.use('/api/analytics',       require('./routes/analytics'));
-app.use('/api/exercises',       require('./routes/exercises'));
-
-/* ---------- Health check ---------- */
-app.get('/api/health', (_req, res) =>
-  res.json({ ok: true, ts: Date.now(), env: process.env.NODE_ENV })
-);
-
-/* ---------- Error handler ---------- */
-app.use((err, _req, res, _next) => {
-  console.error('[ERROR]', err);
-  res.status(err.status || 500).json({ error: err.message || 'Server error' });
+// ⚠️ STEP 5: THE MISSING ROUTE THAT FIXES THE 404 ERROR
+// This directly handles GET https://fitforge-backend-wey2.onrender.com/api/users/5
+app.get('/api/users/:id', async (req, res) => {
+  try {
+    // We add 'created_at' to the SELECT statement so your frontend gets the date!
+    const [rows] = await db.query(
+      'SELECT id, username, full_name, email, role, experience_years, expertise, created_at FROM users WHERE id = ?',
+      [req.params.id]
+    );
+    
+    if (rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    
+    res.json(rows[0]); 
+  } catch (error) {
+    console.error("Database error fetching user:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
 });
 
-const PORT = process.env.PORT || 5000;
+// Basic health check route to make sure the server is running
+app.get('/', (req, res) => {
+  res.send('FitForge Backend is running!');
+});
+
+// ⚠️ STEP 6: START THE SERVER
 app.listen(PORT, () => {
-  console.log(`🚀 FitForge API on :${PORT}`);
-  console.log(`   Environment: ${process.env.NODE_ENV || 'development'}`);
-  console.log(`   Allowed origins: ${allowedOrigins.join(', ')}`);
+  console.log(`Server is running on port ${PORT}`);
 });
