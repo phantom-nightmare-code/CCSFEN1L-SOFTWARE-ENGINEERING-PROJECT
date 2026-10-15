@@ -2,16 +2,14 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mysql = require('mysql2/promise'); 
-const mongoose = require('mongoose'); // ✅ Required for MongoDB
+const mongoose = require('mongoose'); 
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ⚠️ MIDDLEWARE
 app.use(cors());
 app.use(express.json());
 
-// ⚠️ MYSQL DATABASE CONNECTION POOL
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
   user: process.env.DB_USER || 'root',
@@ -19,16 +17,14 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'fitforge', 
   port: process.env.DB_PORT || 3306,
   waitForConnections: true,
-  connectionLimit: 10, // ✅ FIXED: Increased to prevent crashes under load
+  connectionLimit: 10, 
   queueLimit: 0
 });
 
-// ⚠️ MONGODB CONNECTION (Required for Admin routes)
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('MongoDB Connected successfully for Admin routes'))
   .catch(err => console.error('MongoDB connection error:', err));
 
-// ⚠️ IMPORT YOUR EXISTING ROUTES
 const adminRoutes = require('./routes/admin');
 const analyticsRoutes = require('./routes/analytics');
 const authRoutes = require('./routes/auth');
@@ -44,7 +40,6 @@ const revokeRoutes = require('./routes/revoke');
 const routinesRoutes = require('./routes/routines');
 const workoutsRoutes = require('./routes/workouts');
 
-// ⚠️ MOUNT YOUR EXISTING ROUTES
 app.use('/api/admin', adminRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/auth', authRoutes);
@@ -64,9 +59,8 @@ app.use('/api/workouts', workoutsRoutes);
 app.get('/api/users/:id', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      // ✅ FIXED: COALESCE ensures a date is returned even if DB is null
-      `SELECT id, username, full_name, email, role, experience_years, expertise, 
-              COALESCE(created_at, NOW()) as created_at 
+      // ✅ FIXED: Removed COALESCE, letting frontend handle null dates
+      `SELECT id, username, full_name, email, role, experience_years, expertise, created_at 
        FROM users WHERE id = ?`,
       [req.params.id]
     );
@@ -77,12 +71,12 @@ app.get('/api/users/:id', async (req, res) => {
     
     res.json(rows[0]); 
   } catch (error) {
-    console.error("Database error fetching user:", error);
+    console.error("❌ Database error fetching user:", error); // Detailed log
     res.status(500).json({ error: error.message }); 
   }
 });
 
-// ⚠️ THE USER PROFILE UPDATE ROUTE (PUT) — ✅ NEWLY ADDED
+// ⚠️ THE USER PROFILE UPDATE ROUTE (PUT)
 app.put('/api/users/:id/coach-details', async (req, res) => {
   try {
     const { full_name, experience_years, expertise } = req.body;
@@ -90,7 +84,6 @@ app.put('/api/users/:id/coach-details', async (req, res) => {
 
     if (!userId) return res.status(400).json({ error: 'User ID required' });
 
-    // Update all fields in the MySQL users table
     await pool.query(
       'UPDATE users SET full_name = ?, experience_years = ?, expertise = ? WHERE id = ?',
       [full_name, experience_years || 0, expertise || null, userId]
@@ -98,17 +91,15 @@ app.put('/api/users/:id/coach-details', async (req, res) => {
 
     res.json({ ok: true, message: 'Profile updated successfully' });
   } catch (error) {
-    console.error("Error updating coach details:", error);
+    console.error("❌ Error updating coach details:", error); // Detailed log
     res.status(500).json({ error: error.message });
   }
 });
 
-// Health check route
 app.get('/', (req, res) => {
   res.send('FitForge Backend is running!');
 });
 
-// ⚠️ START THE SERVER
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
