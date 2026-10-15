@@ -3,21 +3,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; // Adjust path if needed
 import { supabase } from '../lib/supabaseClient'; // Adjust path if needed
 
-// Note: If SummaryCard or other components are imported here, 
-// you can remove their imports if they are no longer used anywhere else in this file.
+// Keep your SummaryCard import if you have it
+// import SummaryCard from '../components/SummaryCard'; 
 
 export default function Profile() {
-  const { user, isAdmin } = useAuth(); // Assuming you have an auth context
+  const { user, isAdmin } = useAuth(); 
   const navigate = useNavigate();
   
-  // State for user data and tabs
   const [tab, setTab] = useState('overview');
   const [activeMembership, setActiveMembership] = useState(null);
   const [loading, setLoading] = useState(true);
   const [transactions, setTransactions] = useState([]);
   const [rentals, setRentals] = useState([]);
 
-  // Determine if the current user is a coach
+  // 👇 1. CHECK IF THE USER IS A COACH
   const isCoach = user?.role === 'coach';
 
   useEffect(() => {
@@ -26,15 +25,10 @@ export default function Profile() {
       return;
     }
 
-    // Fetch user data (memberships, transactions, rentals)
     const fetchData = async () => {
       setLoading(true);
-      
-      // TODO: Replace this with your actual Supabase fetch logic
-      // Example:
-      // const { data: membershipData } = await supabase.from('memberships').select('*').eq('user_id', user.id).eq('status', 'active').single();
-      // setActiveMembership(membershipData);
-      
+      // TODO: Your actual fetch logic here
+      // const { data } = await supabase.from('memberships').select('*').eq('user_id', user.id)...
       setLoading(false);
     };
 
@@ -46,6 +40,7 @@ export default function Profile() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-5xl">
+      
       {/* --- HEADER SECTION --- */}
       <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
         <div>
@@ -53,13 +48,21 @@ export default function Profile() {
           <p className="text-gray-500">{user.email}</p>
         </div>
         
-        {/* Membership Status Badge Removed */}
-        {/* Previously: {!isAdmin && activeMembership && <span>ACTIVE</span>} */}
-        
+        {/* 👇 2. ONLY SHOW MEMBERSHIP BADGE IF NOT A COACH */}
+        {!isAdmin && !isCoach && activeMembership && (
+          <span className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium">
+            ACTIVE MEMBER
+          </span>
+        )}
       </div>
 
-      {/* Active Membership Banner Removed */}
-      {/* Previously: {!isAdmin && activeMembership && <div>...banner content...</div>} */}
+      {/* 👇 3. ONLY SHOW MEMBERSHIP BANNER IF NOT A COACH */}
+      {!isAdmin && !isCoach && activeMembership && (
+        <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg mb-6">
+          <h3 className="font-semibold text-blue-800">Active Membership</h3>
+          <p className="text-blue-600 text-sm">Your membership is active.</p>
+        </div>
+      )}
 
       {/* Admin Note (Kept for admins only) */}
       {isAdmin && (
@@ -68,8 +71,28 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Summary Cards Removed */}
-      {/* Previously: <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">...</div> */}
+      {/* 👇 4. ONLY SHOW SUMMARY CARDS IF NOT A COACH */}
+      {!isCoach && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          {/* Replace these with your actual SummaryCard components */}
+          <div className="bg-gray-800 p-4 rounded-lg">
+            <p className="text-gray-400 text-sm">TOTAL SPENT</p>
+            <p className="text-green-500 font-bold">₱0.00</p>
+          </div>
+          <div className="bg-gray-800 p-4 rounded-lg">
+            <p className="text-gray-400 text-sm">REFUNDED</p>
+            <p className="text-white font-bold">₱0.00</p>
+          </div>
+          <div className="bg-gray-800 p-4 rounded-lg">
+            <p className="text-gray-400 text-sm">TRANSACTIONS</p>
+            <p className="text-blue-500 font-bold">0</p>
+          </div>
+          <div className="bg-gray-800 p-4 rounded-lg">
+            <p className="text-gray-400 text-sm">ACTIVE RENTALS</p>
+            <p className="text-orange-500 font-bold">0</p>
+          </div>
+        </div>
+      )}
 
       {/* --- TABS NAVIGATION --- */}
       <div className="flex space-x-4 border-b mb-6">
@@ -91,10 +114,23 @@ export default function Profile() {
       {/* Overview Tab */}
       {tab === 'overview' && (
         <div className="space-y-6">
-          {/* Membership Panel Removed */}
-          {/* Previously: {!isAdmin && user?.role !== 'coach' && (activeMembership ? (...) : (...))} */}
           
-          {/* Other Overview Content */}
+          {/* 👇 5. ONLY SHOW MEMBERSHIP PANEL IN OVERVIEW IF NOT A COACH */}
+          {!isAdmin && !isCoach && (
+            activeMembership ? (
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <h3 className="text-lg font-semibold mb-4">Membership Status</h3>
+                <p className="text-gray-600">Your membership is active.</p>
+              </div>
+            ) : (
+              <div className="bg-white p-6 rounded-lg shadow-sm border">
+                <h3 className="text-lg font-semibold mb-4">Membership Status</h3>
+                <p className="text-gray-600">No active membership. <Link to="/membership" className="text-blue-600 hover:underline">Subscribe</Link></p>
+              </div>
+            )
+          )}
+          
+          {/* Other Overview Content (Shown to everyone) */}
           <div className="bg-white p-6 rounded-lg shadow-sm border">
             <h3 className="text-lg font-semibold mb-4">Account Information</h3>
             <p><strong>Name:</strong> {user.full_name || 'N/A'}</p>
@@ -120,8 +156,11 @@ export default function Profile() {
       {tab === 'memberships' && (
         <div className="bg-white p-6 rounded-lg shadow-sm border">
           <h3 className="text-lg font-semibold mb-4">Membership History</h3>
-          {/* If you want to hide this for coaches as well, add: {!isCoach && (...)} */}
-          <p className="text-gray-500">Membership details go here.</p>
+          {!isCoach ? (
+             <p className="text-gray-500">Membership details go here.</p>
+          ) : (
+             <p className="text-gray-500">Coaches do not have membership history.</p>
+          )}
         </div>
       )}
 
