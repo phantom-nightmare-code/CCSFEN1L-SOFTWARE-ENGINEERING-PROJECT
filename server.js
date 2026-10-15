@@ -59,7 +59,6 @@ app.use('/api/workouts', workoutsRoutes);
 app.get('/api/users/:id', async (req, res) => {
   try {
     const [rows] = await pool.query(
-      // ✅ FIXED: Removed COALESCE, letting frontend handle null dates
       `SELECT id, username, full_name, email, role, experience_years, expertise, created_at 
        FROM users WHERE id = ?`,
       [req.params.id]
@@ -71,8 +70,9 @@ app.get('/api/users/:id', async (req, res) => {
     
     res.json(rows[0]); 
   } catch (error) {
-    console.error("❌ Database error fetching user:", error); // Detailed log
-    res.status(500).json({ error: error.message }); 
+    console.error("❌ Database error fetching user:", error);
+    // ✅ FIXED: Return sqlMessage if available so frontend sees the real error
+    res.status(500).json({ error: error.sqlMessage || error.message || 'Unknown database error' }); 
   }
 });
 
@@ -91,8 +91,9 @@ app.put('/api/users/:id/coach-details', async (req, res) => {
 
     res.json({ ok: true, message: 'Profile updated successfully' });
   } catch (error) {
-    console.error("❌ Error updating coach details:", error); // Detailed log
-    res.status(500).json({ error: error.message });
+    console.error("❌ Error updating coach details:", error);
+    // ✅ FIXED: Return sqlMessage if available
+    res.status(500).json({ error: error.sqlMessage || error.message || 'Unknown update error' });
   }
 });
 
