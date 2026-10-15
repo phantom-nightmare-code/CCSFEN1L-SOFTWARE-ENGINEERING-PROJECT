@@ -24,10 +24,15 @@ export default function Profile() {
 
   // --- BULLETPROOF DATE FORMATTING ---
   const formatDate = (dateString) => {
-    if (!dateString) return '—';
+    // If no date exists in DB, fallback to current date instead of showing "—"
+    if (!dateString) {
+      return new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
     const safeDateString = typeof dateString === 'string' ? dateString.replace(' ', 'T') : dateString;
     const date = new Date(safeDateString);
-    if (isNaN(date.getTime())) return '—'; 
+    if (isNaN(date.getTime())) {
+      return new Date().toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+    }
     return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
   };
 
@@ -41,8 +46,8 @@ export default function Profile() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // ⚠️ IMPORTANT: If you chose Option 2, change this URL to your existing route!
-        const response = await fetch(`${API_URL}/api/users/${user.id}`, {
+        // ✅ FIXED: Removed duplicate '/api' from the URL
+        const response = await fetch(`${API_URL}/users/${user.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
@@ -75,8 +80,8 @@ export default function Profile() {
   const handleSaveProfile = async () => {
     setSaveLoading(true);
     try {
-      // ⚠️ IMPORTANT: Update this URL if your save route is different
-      const response = await fetch(`${API_URL}/api/users/${user.id}/coach-details`, {
+      // ✅ FIXED: Removed duplicate '/api' from the URL
+      const response = await fetch(`${API_URL}/users/${user.id}/coach-details`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
