@@ -19,6 +19,7 @@ import Analytics from './pages/Analytics';
 import Exercises from './pages/Exercises';
 import VerifyPayment from './pages/VerifyPayment';
 import VerifyEmail from './pages/VerifyEmail';
+import RevokeDeletion from './pages/RevokeDeletion';
 import MyCoach from './pages/MyCoach';
 import Coach from './pages/Coach';
 import CoachClient from './pages/CoachClient';
@@ -38,16 +39,15 @@ export default function App() {
               <Navbar />
               <main className="flex-1">
                 <Routes>
-                  {/* Public routes */}
+                  {/* Public */}
                   <Route path="/"         element={<Home />} />
                   <Route path="/login"    element={<Login />} />
                   <Route path="/register" element={<Register />} />
-
-                  {/* Public verification pages */}
                   <Route path="/verify-payment/:reference" element={<VerifyPayment />} />
                   <Route path="/verify-email/:token"       element={<VerifyEmail />} />
+                  <Route path="/revoke-deletion/:token"    element={<RevokeDeletion />} />
 
-                  {/* Logged-in user routes */}
+                  {/* Auth required */}
                   <Route element={<ProtectedRoute />}>
                     <Route path="/workouts"        element={<Workouts />} />
                     <Route path="/routines"        element={<Routines />} />
@@ -60,13 +60,13 @@ export default function App() {
                     <Route path="/my-coach"        element={<MyCoach />} />
                   </Route>
 
-                  {/* Coach-only routes */}
+                  {/* Coach only */}
                   <Route element={<CoachRoute />}>
-                    <Route path="/coach"            element={<Coach />} />
-                    <Route path="/coach/client/:id" element={<CoachClient />} />
+                    <Route path="/coach"             element={<Coach />} />
+                    <Route path="/coach/client/:id"  element={<CoachClient />} />
                   </Route>
 
-                  {/* Admin-only routes */}
+                  {/* Admin only */}
                   <Route element={<AdminRoute />}>
                     <Route path="/admin" element={<Admin />} />
                   </Route>
