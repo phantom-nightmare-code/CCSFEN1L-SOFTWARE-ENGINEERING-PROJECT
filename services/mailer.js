@@ -16,7 +16,6 @@ function parseEmails(input) {
 }
 
 function parseFrom(fromStr) {
-  // Accepts: 'Name <email@example.com>' or 'email@example.com'
   if (!fromStr) return { name: 'FitForge', email: process.env.EMAIL_USER };
   const match = fromStr.match(/^(.*)<(.+)>$/);
   if (match) {
@@ -38,15 +37,11 @@ async function sendViaBrevo({ to, subject, html, cc }) {
     to: recipients,
     subject,
     htmlContent: html,
-    // Disable Brevo's link tracking — its tracking subdomain
-    // is unreliable and breaks verification links
     trackClicks: false,
     trackOpens: false,
   };
 
-  if (cc && cc.length) {
-    body.cc = cc.map(email => ({ email }));
-  }
+  if (cc && cc.length) body.cc = cc.map(email => ({ email }));
 
   console.log('[mailer] POST → Brevo API', { to: recipients.map(r => r.email), subject });
 
@@ -72,27 +67,22 @@ async function sendViaBrevo({ to, subject, html, cc }) {
   return data;
 }
 
-/* ---------- WELCOME / VERIFICATION EMAIL ---------- */
+/* ---------- WELCOME / VERIFICATION ---------- */
 
 async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
   const name = fullName || 'there';
-
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
       <h2 style="text-align: center; color: #2563eb; margin-top: 0;">Welcome to FitForge 💪</h2>
       <p style="color:#333;">Hi ${name},</p>
       <p style="color:#333;">Thanks for signing up! Please confirm your email address to activate your account.</p>
-
       <p style="text-align: center; margin: 28px 0;">
         <a href="${verifyUrl}" style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
           Verify my email
         </a>
       </p>
-
       <p style="font-size: 12px; color:#666;">This link expires in 24 hours.</p>
-
       <hr style="border:none; border-top:1px solid #eee; margin: 24px 0;" />
-
       <p style="font-size: 13px; color:#333;">Here's what you can do once you're in:</p>
       <ul style="font-size: 13px; color:#333; padding-left: 20px;">
         <li>Log workouts and beat your personal records</li>
@@ -101,7 +91,6 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
         <li>Rent gym equipment by the hour</li>
         <li>Get coaching feedback from your coach</li>
       </ul>
-
       <p style="font-size: 11px; color: #888; text-align: center; margin-bottom: 0; margin-top: 24px;">
         If the button doesn't work, paste this link in your browser:<br/>
         <span style="word-break: break-all;">${verifyUrl}</span>
@@ -111,15 +100,10 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
       </p>
     </div>
   `;
-
-  return sendViaBrevo({
-    to,
-    subject: 'Verify your FitForge account 💪',
-    html,
-  });
+  return sendViaBrevo({ to, subject: 'Verify your FitForge account 💪', html });
 }
 
-/* ---------- PAYMENT VERIFICATION EMAIL ---------- */
+/* ---------- PAYMENT VERIFICATION ---------- */
 
 async function sendPaymentVerificationEmail({
   to, additionalTo = [], qrDataUrl, reference,
@@ -127,16 +111,14 @@ async function sendPaymentVerificationEmail({
 }) {
   const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const verifyUrl = `${process.env.CLIENT_URL}/verify-payment/${reference}`;
-
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
       <h2 style="text-align: center; color: #2563eb; margin-top: 0;">FitForge Payment Verification</h2>
+      <p style="color:#333;">Hi,</p>
       <p style="color:#333;">Your payment is pending confirmation. Scan the QR code below (or click the button) to view the payment details and confirm.</p>
-
       <div style="text-align: center; margin: 20px 0;">
         <img src="${qrDataUrl}" alt="Payment QR Code" style="width: 220px; height: 220px; border-radius: 8px;" />
       </div>
-
       <table style="width: 100%; font-size: 14px; color: #333; border-collapse: collapse;">
         <tr><td style="padding: 6px 0;"><strong>Reference:</strong></td><td style="text-align:right;">${reference}</td></tr>
         <tr><td style="padding: 6px 0;"><strong>Amount:</strong></td><td style="text-align:right;">PHP ${Number(amount).toFixed(2)}</td></tr>
@@ -144,13 +126,11 @@ async function sendPaymentVerificationEmail({
         <tr><td style="padding: 6px 0;"><strong>Purpose:</strong></td><td style="text-align:right; text-transform: capitalize;">${purpose}</td></tr>
         ${itemName ? `<tr><td style="padding: 6px 0;"><strong>Item:</strong></td><td style="text-align:right;">${itemName}</td></tr>` : ''}
       </table>
-
       <p style="text-align: center; margin: 24px 0;">
         <a href="${verifyUrl}" style="display:inline-block; padding: 12px 24px; background:#2563eb; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
           View &amp; Confirm Payment
         </a>
       </p>
-
       <p style="font-size: 11px; color: #888; text-align: center; margin-bottom: 0;">
         If the button doesn't work, paste this link in your browser:<br/>
         <span style="word-break: break-all;">${verifyUrl}</span>
@@ -160,29 +140,23 @@ async function sendPaymentVerificationEmail({
       </p>
     </div>
   `;
-
   const allRecipients = [
     ...parseEmails(to),
     ...parseEmails(additionalTo),
   ];
   const uniqueRecipients = [...new Set(allRecipients)];
-
   const cc = adminCc && EMAIL_RE.test(adminCc) && !uniqueRecipients.includes(adminCc.toLowerCase())
-    ? [adminCc]
-    : [];
-
+    ? [adminCc] : [];
   return sendViaBrevo({
     to: uniqueRecipients,
     subject: `FitForge — Verify your payment (${reference})`,
-    html,
-    cc,
+    html, cc,
   });
 }
 
 async function sendPaymentResultEmail({ to, reference, amount, status, reason }) {
   const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const ok = status === 'verified';
-
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
       <h2 style="text-align: center; color: ${ok ? '#16a34a' : '#dc2626'}; margin-top: 0;">
@@ -197,18 +171,97 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
       <p style="color:#333;">— The FitForge Team</p>
     </div>
   `;
-
   const primary = parseEmails(to);
   const cc = adminCc && EMAIL_RE.test(adminCc) && !primary.includes(adminCc.toLowerCase())
-    ? [adminCc]
-    : [];
-
+    ? [adminCc] : [];
   return sendViaBrevo({
     to: primary,
     subject: `FitForge — Payment ${ok ? 'verified' : 'rejected'} (${reference})`,
-    html,
-    cc,
+    html, cc,
   });
+}
+
+/* ---------- COACH PAYMENT RECEIPT + QR ---------- */
+
+async function sendCoachPaymentEmail({
+  to, memberName, coachName, reference, amount, rate, hours,
+  method, sessionDate, notes, qrDataUrl,
+}) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
+      <h2 style="text-align: center; color: #2563eb; margin-top: 0;">Coach Payment Receipt 🧾</h2>
+      <p style="color:#333;">Hi ${memberName || 'there'},</p>
+      <p style="color:#333;">
+        Your payment to coach <b>${coachName}</b> is ${method === 'cash' ? 'confirmed' : 'being processed'}.
+      </p>
+      ${qrDataUrl ? `
+        <div style="text-align: center; margin: 20px 0;">
+          <img src="${qrDataUrl}" alt="Payment QR" style="width: 200px; height: 200px; border-radius: 8px;" />
+          <p style="font-size: 11px; color:#888;">Scan this for your payment reference</p>
+        </div>
+      ` : ''}
+      <table style="width: 100%; font-size: 14px; color: #333; border-collapse: collapse;">
+        <tr><td style="padding: 6px 0;"><strong>Reference:</strong></td><td style="text-align:right; font-family:monospace;">${reference}</td></tr>
+        <tr><td style="padding: 6px 0;"><strong>Coach:</strong></td><td style="text-align:right;">${coachName}</td></tr>
+        <tr><td style="padding: 6px 0;"><strong>Rate:</strong></td><td style="text-align:right;">PHP ${Number(rate).toFixed(2)}/hr</td></tr>
+        <tr><td style="padding: 6px 0;"><strong>Hours:</strong></td><td style="text-align:right;">${hours}</td></tr>
+        <tr><td style="padding: 6px 0;"><strong>Method:</strong></td><td style="text-align:right; text-transform: uppercase;">${method}</td></tr>
+        ${sessionDate ? `<tr><td style="padding: 6px 0;"><strong>Session date:</strong></td><td style="text-align:right;">${sessionDate}</td></tr>` : ''}
+        ${notes ? `<tr><td style="padding: 6px 0;"><strong>Notes:</strong></td><td style="text-align:right;">${notes}</td></tr>` : ''}
+      </table>
+      <hr style="border:none; border-top:1px dashed #ccc; margin: 20px 0;" />
+      <div style="display:flex; justify-content:space-between; font-size:18px; font-weight:bold; color:#16a34a; text-align:right;">
+        Total: PHP ${Number(amount).toFixed(2)}
+      </div>
+      <p style="font-size: 12px; color: #888; text-align: center; margin-top: 24px;">
+        — The FitForge Team
+      </p>
+    </div>
+  `;
+  return sendViaBrevo({
+    to,
+    subject: `Coach payment receipt (${reference})`,
+    html,
+  });
+}
+
+/* ---------- ACCOUNT DELETION NOTICE ---------- */
+
+async function sendAccountDeletionNoticeEmail({
+  to, fullName, reason, deletionDate, revokeUrl,
+}) {
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
+      <h2 style="text-align: center; color: #dc2626; margin-top: 0;">⚠️ Account Scheduled for Deletion</h2>
+      <p style="color:#333;">Hi ${fullName || 'there'},</p>
+      <p style="color:#333;">
+        An administrator has scheduled your FitForge account for deletion.
+      </p>
+      ${reason ? `<p style="color:#666; font-size: 13px; background:#f3f4f6; padding: 10px; border-radius: 6px;"><b>Reason:</b> ${reason}</p>` : ''}
+      <p style="color:#333;">
+        Your account will be <b>permanently deleted on ${deletionDate}</b>. All your data — workouts, routines, memberships, and payment history — will be lost.
+      </p>
+      <p style="color:#333; font-weight:600;">
+        Changed your mind? Click below to keep your account:
+      </p>
+      <p style="text-align: center; margin: 28px 0;">
+        <a href="${revokeUrl}" style="display:inline-block; padding: 14px 28px; background:#16a34a; color:#fff; border-radius:6px; text-decoration:none; font-weight:600;">
+          ✓ Keep My Account
+        </a>
+      </p>
+      <p style="font-size: 12px; color:#888; text-align: center;">
+        If you don't take action before the deadline, your account will be permanently removed.
+      </p>
+      <p style="font-size: 11px; color: #888; text-align: center;">
+        Revoke link:<br/>
+        <span style="word-break: break-all;">${revokeUrl}</span>
+      </p>
+      <p style="font-size: 12px; color: #888; text-align: center; margin-top: 24px;">
+        — The FitForge Team
+      </p>
+    </div>
+  `;
+  return sendViaBrevo({ to, subject: '⚠️ Your FitForge account is scheduled for deletion', html });
 }
 
 module.exports = {
@@ -216,4 +269,6 @@ module.exports = {
   sendWelcomeVerificationEmail,
   sendPaymentVerificationEmail,
   sendPaymentResultEmail,
+  sendCoachPaymentEmail,
+  sendAccountDeletionNoticeEmail,
 };
