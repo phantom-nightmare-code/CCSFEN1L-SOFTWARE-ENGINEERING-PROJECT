@@ -11,7 +11,8 @@ router.use(authenticate, requireCoach);
 router.get('/me', async (req, res, next) => {
   try {
     const [[coach]] = await pool.query(
-      'SELECT id, email, username, full_name, role, created_at FROM users WHERE id = ?',
+      `SELECT id, email, username, full_name, role, created_at, coach_hourly_rate
+       FROM users WHERE id = ?`,
       [req.user.id]
     );
 
@@ -28,7 +29,30 @@ router.get('/me', async (req, res, next) => {
       `SELECT COUNT(*) AS pendingRequests FROM coach_requests WHERE status = 'pending'`
     );
 
-    res.json({ coach, stats: { clientCount, feedbackCount, pendingRequests } });
+    const [[{ totalEarnings }]] = await pool.query(
+      `SELECT COALESCE(SUM(amount), 0) AS totalEarnings
+       FROM coach_payments WHERE coach_id = ? AND status = 'paid'`,
+      [req.user.id]
+    );
+
+    const [[{ avgRating, reviewCount }]] = await pool.query(
+      `SELECT COALESCE(AVG(rating), 0) AS avgRating,
+              COUNT(rating) AS reviewCount
+       FROM coach_feedback WHERE coach_id = ? AND rating IS NOT NULL`,
+      [req.user.id]
+    );
+
+    res.json({
+      coach,
+      stats: {
+        clientCount,
+        feedbackCount,
+        pendingRequests,
+        totalEarnings: Number(totalEarnings),
+        avgRating: Number(avgRating),
+        reviewCount: Number(reviewCount),
+      },
+    });
   } catch (err) { next(err); }
 });
 
