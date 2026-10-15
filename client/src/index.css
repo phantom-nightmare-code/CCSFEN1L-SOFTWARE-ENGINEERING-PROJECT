@@ -1,9 +1,7 @@
 @import "tailwindcss";
 
-/* Enable class-based dark mode (Tailwind v4 syntax) */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Brand colors — used throughout the app */
 @theme {
   --color-brand-50:  #eff6ff;
   --color-brand-100: #dbeafe;
@@ -12,19 +10,17 @@
   --color-brand-700: #1d4ed8;
 }
 
-html, body, #root { height: 100%; }
+@layer base {
+  html, body, #root { height: 100%; }
 
-body {
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color: #111827;
-  background-color: #f9fafb;
-}
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: #111827;
+    background-color: #f9fafb;
+  }
 
-.dark body {
-  color: #f3f4f6;
-  background-color: #030712;
-}
-
-h1, h2, h3, h4, h5, h6, p, span, label, li, td, th, div {
-  color: inherit;
+  .dark body {
+    color: #f3f4f6;
+    background-color: #030712;
+  }
 }
