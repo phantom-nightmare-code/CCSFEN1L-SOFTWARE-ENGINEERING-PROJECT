@@ -343,8 +343,16 @@ EMAIL_USER=your.email@gmail.com
 EMAIL_PASS=<16-char-app-password>
 EMAIL_CC_ADMIN=
 
+# Google reCAPTCHA v2 Checkbox (signup)
+RECAPTCHA_SECRET_KEY=<server-side-secret-key>
+
 # Client URL
 CLIENT_URL=http://localhost:5173
+
+# In client/.env
+VITE_RECAPTCHA_SITE_KEY=<public-site-key>
+
+Create a reCAPTCHA v2 Checkbox site in the Google reCAPTCHA Admin Console and add `localhost` to its allowed domains for local development. Keep the secret key in the server `.env`; never expose it in a `VITE_` variable or client code. Copy the client variable into `client/.env`. Restart both servers after changing environment variables.
 
 ### 4. Set Up the Database
 1. Start MySQL in XAMPP Control Panel
@@ -364,7 +372,6 @@ cd client
 npm run dev
 
 Open http://localhost:5173 in your browser.
-
 
 
 

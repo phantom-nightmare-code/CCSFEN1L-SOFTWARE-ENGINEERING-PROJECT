@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import ReCAPTCHA from 'react-google-recaptcha';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../api';
@@ -7,9 +8,12 @@ import api from '../api';
 export default function Register() {
   const { register } = useAuth();
   const { showToast } = useToast();
+  const captchaRef = useRef(null);
+  const siteKey = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
   const [form, setForm] = useState({
     email: '', password: '', username: '', full_name: '', birthday: '',
   });
+  const [captchaToken, setCaptchaToken] = useState('');
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -43,9 +47,14 @@ export default function Register() {
       return;
     }
 
+    if (!captchaToken) {
+      setErr('Please complete the CAPTCHA');
+      return;
+    }
+
     setLoading(true);
     try {
-      const data = await register(form);
+      const data = await register({ ...form, captchaToken });
       if (data.requiresVerification) {
         setSubmitted(true);
         showToast('Account created — check your email', 'success');
@@ -58,6 +67,8 @@ export default function Register() {
       showToast(msg, 'error');
     } finally {
       setLoading(false);
+      setCaptchaToken('');
+      captchaRef.current?.reset();
     }
   };
 
@@ -152,8 +163,25 @@ export default function Register() {
           We'll send a verification email to confirm your account.
         </p>
 
+        {siteKey ? (
+          <ReCAPTCHA
+            ref={captchaRef}
+            sitekey={siteKey}
+            onChange={(token) => setCaptchaToken(token || '')}
+            onExpired={() => setCaptchaToken('')}
+            onErrored={() => {
+              setCaptchaToken('');
+              setErr('CAPTCHA failed to load. Please refresh and try again.');
+            }}
+          />
+        ) : (
+          <p className="text-sm text-red-500">
+            CAPTCHA is not configured. Set VITE_RECAPTCHA_SITE_KEY in the client environment.
+          </p>
+        )}
+
         <button
-          disabled={loading}
+          disabled={loading || !siteKey || !captchaToken}
           className="w-full bg-brand-600 text-white py-2 rounded hover:bg-brand-700 disabled:opacity-60"
         >
           {loading ? 'Creating…' : 'Register'}

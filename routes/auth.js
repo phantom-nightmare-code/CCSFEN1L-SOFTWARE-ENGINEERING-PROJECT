@@ -9,6 +9,46 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
+async function verifyCaptcha(token) {
+  const secret = process.env.RECAPTCHA_SECRET_KEY;
+  if (!secret) {
+    const err = new Error('CAPTCHA verification is not configured');
+    err.status = 503;
+    throw err;
+  }
+
+  let response;
+  try {
+    response = await fetch('https://www.google.com/recaptcha/api/siteverify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ secret, response: token }),
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (cause) {
+    const err = new Error('CAPTCHA verification service is unavailable', { cause });
+    err.status = 502;
+    throw err;
+  }
+
+  if (!response.ok) {
+    const err = new Error('CAPTCHA verification service returned an error');
+    err.status = 502;
+    throw err;
+  }
+
+  let result;
+  try {
+    result = await response.json();
+  } catch (cause) {
+    const err = new Error('CAPTCHA verification service returned an invalid response', { cause });
+    err.status = 502;
+    throw err;
+  }
+
+  return result.success === true;
+}
+
 const signToken = (u) =>
   jwt.sign(
     { id: u.id, email: u.email, role: u.role },
@@ -48,7 +88,7 @@ function validateBirthday(birthday) {
 /* ---------- POST /api/auth/register ---------- */
 router.post('/register', async (req, res, next) => {
   try {
-    const { email, password, full_name, username, birthday } = req.body;
+    const { email, password, full_name, username, birthday, captchaToken } = req.body;
     if (!email || !password)
       return res.status(400).json({ error: 'Email and password are required' });
     
@@ -61,6 +101,11 @@ router.post('/register', async (req, res, next) => {
 
     if (password.length < 6)
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
+
+    if (typeof captchaToken !== 'string' || !captchaToken.trim())
+      return res.status(400).json({ error: 'CAPTCHA verification is required' });
+    if (!(await verifyCaptcha(captchaToken)))
+      return res.status(400).json({ error: 'CAPTCHA verification failed. Please try again.' });
 
     const bdErr = validateBirthday(birthday);
     if (bdErr) return res.status(400).json({ error: bdErr });
