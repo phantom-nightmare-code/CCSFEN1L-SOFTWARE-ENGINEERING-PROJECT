@@ -264,6 +264,81 @@ async function sendAccountDeletionNoticeEmail({
   return sendViaBrevo({ to, subject: '⚠️ Your FitForge account is scheduled for deletion', html });
 }
 
+/* ---------- PAYMENT RECEIPT (NEW) ---------- */
+
+async function sendPaymentReceiptEmail({
+  to, userName, reference, amount, method, purpose, date, itemName,
+}) {
+  const formattedAmount = Number(amount).toLocaleString('en-PH', {
+    style: 'currency',
+    currency: 'PHP',
+  });
+
+  const formattedDate = new Date(date).toLocaleDateString('en-US', {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
+      <div style="background-color: #1e1e24; color: white; padding: 20px; border-radius: 8px 8px 0 0; text-align: center;">
+        <h1 style="margin: 0;">FitForge</h1>
+        <p style="margin: 5px 0 0; color: #aaa;">Payment Receipt</p>
+      </div>
+      
+      <div style="background-color: white; padding: 30px; border-radius: 0 0 8px 8px; border: 1px solid #e0e0e0; border-top: none;">
+        <p style="font-size: 16px;">Hi <strong>${userName || 'Valued Member'}</strong>,</p>
+        <p>Thank you for your payment! Here is your receipt:</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">Reference No.</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; font-weight: bold;">${reference}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">Date</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right;">${formattedDate}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">Purpose</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; text-transform: capitalize;">${purpose}${itemName ? ` - ${itemName}` : ''}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">Payment Method</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; text-transform: uppercase;">${method}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; color: #666;">Status</td>
+            <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; color: green; font-weight: bold;">PAID</td>
+          </tr>
+          <tr>
+            <td style="padding: 15px 10px; font-size: 18px; font-weight: bold;">Total Amount</td>
+            <td style="padding: 15px 10px; font-size: 18px; font-weight: bold; text-align: right; color: #2563eb;">${formattedAmount}</td>
+          </tr>
+        </table>
+        
+        <p style="color: #666; font-size: 14px; margin-top: 30px;">
+          If you have any questions about this transaction, please contact our support team.
+        </p>
+        <p style="color: #666; font-size: 14px;">
+          Thank you for choosing FitForge! 💪
+        </p>
+      </div>
+      
+      <p style="text-align: center; color: #999; font-size: 12px; margin-top: 20px;">
+        This is an automated message from FitForge. Please do not reply to this email.
+      </p>
+    </div>
+  `;
+
+  return sendViaBrevo({
+    to,
+    subject: `FitForge — Payment Receipt (${reference})`,
+    html,
+  });
+}
+
 module.exports = {
   parseEmails,
   sendWelcomeVerificationEmail,
@@ -271,4 +346,5 @@ module.exports = {
   sendPaymentResultEmail,
   sendCoachPaymentEmail,
   sendAccountDeletionNoticeEmail,
+  sendPaymentReceiptEmail, // ✅ NEW
 };
