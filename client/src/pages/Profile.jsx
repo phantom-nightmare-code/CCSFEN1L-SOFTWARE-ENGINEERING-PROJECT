@@ -19,12 +19,15 @@ export default function Profile() {
   
   const [isEditing, setIsEditing] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
+  
+  // ✅ NEW: State for transactions
+  const [transactions, setTransactions] = useState([]);
+  const [totalSpent, setTotalSpent] = useState(0);
 
   const isCoach = user?.role === 'coach';
 
   // --- BULLETPROOF DATE FORMATTING ---
   const formatDate = (dateString) => {
-    // If no date exists in DB, fallback to current date
     if (!dateString) {
       return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
@@ -33,7 +36,6 @@ export default function Profile() {
     if (isNaN(date.getTime())) {
       return new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
-    // ✅ Shows exact date (e.g., Oct 15, 2026)
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
@@ -47,12 +49,13 @@ export default function Profile() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await fetch(`${API_URL}/users/${user.id}`, {
+        // 1. Fetch profile info
+        const profileRes = await fetch(`${API_URL}/users/${user.id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         
-        if (response.ok) {
-          const data = await response.json();
+        if (profileRes.ok) {
+          const data = await profileRes.json();
           console.log("Backend Data Received:", data); 
           
           setCoachDetails({
@@ -65,9 +68,22 @@ export default function Profile() {
             setUser(prev => ({ ...prev, full_name: data.full_name }));
           }
         } else {
-          const errorText = await response.text();
-          console.error(`Failed to fetch profile. Status: ${response.status}. Error: ${errorText}`);
+          console.error("Failed to fetch profile. Status:", profileRes.status);
         }
+
+        // 2. Fetch transactions and total spent
+        const paymentRes = await fetch(`${API_URL}/payments/me`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if (paymentRes.ok) {
+          const paymentData = await paymentRes.json();
+          setTransactions(paymentData.transactions || []);
+          setTotalSpent(paymentData.totalSpent || 0);
+        } else {
+          console.error("Failed to fetch payments. Status:", paymentRes.status);
+        }
+
       } catch (error) {
         console.error("Error fetching profile data:", error);
       }
@@ -98,7 +114,6 @@ export default function Profile() {
         setIsEditing(false);
         alert("Profile saved successfully!"); 
       } else {
-        // ✅ FIXED: Reading as text instead of JSON so we see the real error
         const errorText = await response.text();
         alert(`Failed to save. Server said: ${errorText.substring(0, 200)}`);
       }
@@ -106,7 +121,6 @@ export default function Profile() {
       console.error("Error saving:", error);
       alert("Network error. Please try again.");
     } finally {
-      // ✅ This ensures the button always un-sticks, even if it fails
       setSaveLoading(false); 
     }
   };
@@ -160,11 +174,13 @@ export default function Profile() {
           <>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Total Spent</p>
-              <p className="text-green-400 font-bold text-2xl">₱0.00</p>
+              {/* ✅ FIXED: Dynamic total spent */}
+              <p className="text-green-400 font-bold text-2xl">₱{totalSpent.toFixed(2)}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Transactions</p>
-              <p className="text-blue-400 font-bold text-2xl">0</p>
+              {/* ✅ FIXED: Dynamic transaction count */}
+              <p className="text-blue-400 font-bold text-2xl">{transactions.length}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Active Rentals</p>
@@ -315,7 +331,7 @@ export default function Profile() {
                   </div>
                   <div className="flex justify-between items-center border-b border-gray-800 pb-2">
                     <span className="text-gray-500">Latest Payment</span>
-                    <span className="text-white font-medium">₱0.00</span>
+                    <span className="text-white font-medium">₱{totalSpent > 0 ? 'Paid' : '0.00'}</span>
                   </div>
                 </>
               )}
@@ -324,12 +340,54 @@ export default function Profile() {
         </div>
       )}
 
-      {/* Other tabs for non-coaches */}
+      {/* ✅ NEW: Transactions Tab */}
       {activeTab === 'transactions' && !isCoach && (
-        <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-6 text-center text-gray-500">
-          No transactions found.
+        <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-6">
+          {transactions.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">No transactions found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-gray-400 uppercase border-b border-gray-800">
+                  <tr>
+                    <th className="px-4 py-2">Date</th>
+                    <th className="px-4 py-2">Reference</th>
+                    <th className="px-4 py-2">Purpose</th>
+                    <th className="px-4 py-2">Method</th>
+                    <th className="px-4 py-2 text-right">Amount</th>
+                    <th className="px-4 py-2 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {transactions.map((t) => (
+                    <tr key={t.id} className="border-b border-gray-800/50">
+                      <td className="px-4 py-3">{new Date(t.date).toLocaleDateString()}</td>
+                      <td className="px-4 py-3 font-mono text-xs">{t.reference}</td>
+                      <td className="px-4 py-3 capitalize">
+                        {t.purpose.replace('_', ' ')}
+                        {t.details?.coachName && <span className="block text-xs text-gray-500">Coach: {t.details.coachName}</span>}
+                      </td>
+                      <td className="px-4 py-3 uppercase text-xs">{t.method}</td>
+                      <td className="px-4 py-3 text-right">₱{t.amount.toFixed(2)}</td>
+                      <td className="px-4 py-3 text-center">
+                        <span className={`px-2 py-0.5 rounded text-xs font-bold ${
+                          t.status === 'paid' ? 'bg-green-900/50 text-green-400' : 
+                          t.status === 'pending' ? 'bg-yellow-900/50 text-yellow-400' : 
+                          'bg-red-900/50 text-red-400'
+                        }`}>
+                          {t.status.toUpperCase()}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
+
+      {/* Other tabs for non-coaches */}
       {activeTab === 'memberships' && !isCoach && (
         <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-6 text-center text-gray-500">
           No membership history.
