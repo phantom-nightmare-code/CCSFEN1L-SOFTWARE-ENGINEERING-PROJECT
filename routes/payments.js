@@ -86,6 +86,32 @@ router.post('/', authenticate, async (req, res, next) => {
       );
     }
 
+    // ✅ NEW: Send receipt immediately if payment is instantly paid (cash/card)
+    if (!needsVerification) {
+      try {
+        const { sendPaymentReceiptEmail } = require('../services/mailer');
+        const [rows] = await pool.query(
+          'SELECT email, full_name, username FROM users WHERE id=?', 
+          [req.user.id]
+        );
+        if (rows.length) {
+          const user = rows[0];
+          sendPaymentReceiptEmail({
+            to: user.email,
+            userName: user.full_name || user.username,
+            reference: payment.reference,
+            amount: payment.amount,
+            method: payment.method,
+            purpose: payment.purpose,
+            date: new Date(),
+            itemName: payment.details?.items?.find(i => i.label === 'Item')?.value,
+          }).catch(err => console.error('Receipt email failed:', err.message));
+        }
+      } catch (e) {
+        console.error('Receipt email failed:', e.message);
+      }
+    }
+
     // Email for methods needing verification — fire-and-forget
     // So the HTTP response returns immediately and the QR modal opens
     if (needsVerification) {
