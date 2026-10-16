@@ -830,6 +830,31 @@ router.patch('/payments/:id/verify', async (req, res, next) => {
       );
     }
 
+    // ✅ NEW: Send the receipt email to the user
+    try {
+      const { sendPaymentReceiptEmail } = require('../services/mailer');
+      const [rows] = await pool.query(
+        'SELECT email, full_name, username FROM users WHERE id=?', 
+        [payment.userId]
+      );
+      if (rows.length) {
+        const user = rows[0];
+        await sendPaymentReceiptEmail({
+          to: user.email,
+          userName: user.full_name || user.username,
+          reference: payment.reference,
+          amount: payment.amount,
+          method: payment.method,
+          purpose: payment.purpose,
+          date: payment.verifiedAt,
+          itemName: payment.details?.items?.find(i => i.label === 'Item')?.value,
+        });
+      }
+    } catch (e) {
+      console.error('Receipt email failed:', e.message);
+    }
+
+    // Keep your existing result email as well
     try {
       const { sendPaymentResultEmail } = require('../services/mailer');
       const [rows] = await pool.query('SELECT email FROM users WHERE id=?', [payment.userId]);
