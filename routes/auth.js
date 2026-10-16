@@ -16,6 +16,14 @@ const signToken = (u) =>
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
 
+/* ---------- HELPER: Restrict Email Domains ---------- */
+function isAllowedEmailDomain(email) {
+  if (!email || typeof email !== 'string') return false;
+  const domain = email.toLowerCase().split('@')[1];
+  const allowedDomains = ['gmail.com', 'yahoo.com'];
+  return allowedDomains.includes(domain);
+}
+
 function validateBirthday(birthday) {
   if (!birthday) return null;
   const bd = new Date(birthday);
@@ -43,6 +51,14 @@ router.post('/register', async (req, res, next) => {
     const { email, password, full_name, username, birthday } = req.body;
     if (!email || !password)
       return res.status(400).json({ error: 'Email and password are required' });
+    
+    // ✅ NEW: Check email domain before anything else
+    if (!isAllowedEmailDomain(email)) {
+      return res.status(400).json({
+        error: 'Only Gmail (@gmail.com) and Yahoo (@yahoo.com) email addresses are allowed.',
+      });
+    }
+
     if (password.length < 6)
       return res.status(400).json({ error: 'Password must be at least 6 characters' });
 
@@ -215,17 +231,14 @@ router.post('/login', async (req, res, next) => {
       });
     }
 
-    // Pending deletion check
     if (u.pending_deletion_at) {
       const deadline = new Date(u.pending_deletion_at);
       if (deadline < new Date()) {
-        // Deadline passed — delete the account now
         await pool.query('DELETE FROM users WHERE id = ?', [u.id]);
         return res.status(403).json({
           error: 'Your account has been permanently deleted.',
         });
       }
-      // Still within grace period — allow login and warn
     }
 
     const user = {
