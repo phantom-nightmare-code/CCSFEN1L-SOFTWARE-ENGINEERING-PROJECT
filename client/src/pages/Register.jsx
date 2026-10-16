@@ -25,9 +25,24 @@ export default function Register() {
 
   const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value });
 
+  // ✅ NEW: Validate email domain on submit
+  const isAllowedEmail = (email) => {
+    const domain = email.toLowerCase().split('@')[1];
+    return ['gmail.com', 'yahoo.com'].includes(domain);
+  };
+
   const onSubmit = async (e) => {
     e.preventDefault();
     setErr('');
+
+    // ✅ Frontend check before hitting the backend
+    if (!isAllowedEmail(form.email)) {
+      const msg = 'Only Gmail (@gmail.com) and Yahoo (@yahoo.com) email addresses are allowed.';
+      setErr(msg);
+      showToast(msg, 'error');
+      return;
+    }
+
     setLoading(true);
     try {
       const data = await register(form);
@@ -104,9 +119,15 @@ export default function Register() {
           </p>
         )}
 
-        <input name="email" type="email" required placeholder="Email"
+        <input name="email" type="email" required placeholder="Email (Gmail or Yahoo only)"
           value={form.email} onChange={onChange}
           className="w-full border rounded px-3 py-2 dark:bg-gray-800 dark:border-gray-700" />
+        
+        {/* ✅ NEW: Helpful hint for users */}
+        <p className="text-xs text-gray-400 -mt-2 mb-2">
+          Must be a @gmail.com or @yahoo.com address.
+        </p>
+
         <input name="username" placeholder="Username (optional)"
           value={form.username} onChange={onChange}
           className="w-full border rounded px-3 py-2 dark:bg-gray-800 dark:border-gray-700" />
