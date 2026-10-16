@@ -1,5 +1,5 @@
-// Brevo HTTPS API — works on Render where SMTP is blocked
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+// Resend HTTPS API — works on Render where SMTP is blocked
+const RESEND_API_URL = 'https://api.resend.com/emails';
 
 /* ---------- helpers ---------- */
 
@@ -16,7 +16,7 @@ function parseEmails(input) {
 }
 
 function parseFrom(fromStr) {
-  if (!fromStr) return { name: 'FitForge', email: process.env.EMAIL_USER };
+  if (!fromStr) return { name: 'FitForge', email: 'onboarding@resend.dev' };
   const match = fromStr.match(/^(.*)<(.+)>$/);
   if (match) {
     return { name: match[1].trim().replace(/^"|"$/g, ''), email: match[2].trim() };
@@ -24,33 +24,30 @@ function parseFrom(fromStr) {
   return { name: 'FitForge', email: fromStr.trim() };
 }
 
-async function sendViaBrevo({ to, subject, html, cc }) {
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
+async function sendViaResend({ to, subject, html, cc }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY is not set');
 
   const sender = parseFrom(process.env.EMAIL_FROM);
-  const recipients = parseEmails(to).map(email => ({ email }));
+  const recipients = parseEmails(to);
   if (!recipients.length) throw new Error('No valid recipients');
 
   const body = {
-    sender,
+    from: `${sender.name} <${sender.email}>`,
     to: recipients,
     subject,
-    htmlContent: html,
-    trackClicks: false,
-    trackOpens: false,
+    html: html,
   };
 
-  if (cc && cc.length) body.cc = cc.map(email => ({ email }));
+  if (cc && cc.length) body.cc = cc;
 
-  console.log('[mailer] POST → Brevo API', { to: recipients.map(r => r.email), subject });
+  console.log('[mailer] POST → Resend API', { to: recipients, subject });
 
-  const res = await fetch(BREVO_API_URL, {
+  const res = await fetch(RESEND_API_URL, {
     method: 'POST',
     headers: {
-      accept: 'application/json',
-      'api-key': apiKey,
-      'content-type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify(body),
   });
@@ -59,11 +56,11 @@ async function sendViaBrevo({ to, subject, html, cc }) {
 
   if (!res.ok) {
     const msg = data.message || data.error || `HTTP ${res.status}`;
-    console.error('[mailer] ❌ Brevo API error:', msg, data);
+    console.error('[mailer] ❌ Resend API error:', msg, data);
     throw new Error(msg);
   }
 
-  console.log('[mailer] ✅ Brevo accepted:', data.messageId || '(no id)');
+  console.log('[mailer] ✅ Resend accepted:', data.id || '(no id)');
   return data;
 }
 
@@ -100,7 +97,7 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
       </p>
     </div>
   `;
-  return sendViaBrevo({ to, subject: 'Verify your FitForge account 💪', html });
+  return sendViaResend({ to, subject: 'Verify your FitForge account 💪', html });
 }
 
 /* ---------- PAYMENT VERIFICATION ---------- */
@@ -147,7 +144,7 @@ async function sendPaymentVerificationEmail({
   const uniqueRecipients = [...new Set(allRecipients)];
   const cc = adminCc && EMAIL_RE.test(adminCc) && !uniqueRecipients.includes(adminCc.toLowerCase())
     ? [adminCc] : [];
-  return sendViaBrevo({
+  return sendViaResend({
     to: uniqueRecipients,
     subject: `FitForge — Verify your payment (${reference})`,
     html, cc,
@@ -174,7 +171,7 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
   const primary = parseEmails(to);
   const cc = adminCc && EMAIL_RE.test(adminCc) && !primary.includes(adminCc.toLowerCase())
     ? [adminCc] : [];
-  return sendViaBrevo({
+  return sendViaResend({
     to: primary,
     subject: `FitForge — Payment ${ok ? 'verified' : 'rejected'} (${reference})`,
     html, cc,
@@ -218,7 +215,7 @@ async function sendCoachPaymentEmail({
       </p>
     </div>
   `;
-  return sendViaBrevo({
+  return sendViaResend({
     to,
     subject: `Coach payment receipt (${reference})`,
     html,
@@ -261,10 +258,10 @@ async function sendAccountDeletionNoticeEmail({
       </p>
     </div>
   `;
-  return sendViaBrevo({ to, subject: '⚠️ Your FitForge account is scheduled for deletion', html });
+  return sendViaResend({ to, subject: '⚠️ Your FitForge account is scheduled for deletion', html });
 }
 
-/* ---------- PAYMENT RECEIPT (NEW) ---------- */
+/* ---------- PAYMENT RECEIPT ---------- */
 
 async function sendPaymentReceiptEmail({
   to, userName, reference, amount, method, purpose, date, itemName,
@@ -332,7 +329,7 @@ async function sendPaymentReceiptEmail({
     </div>
   `;
 
-  return sendViaBrevo({
+  return sendViaResend({
     to,
     subject: `FitForge — Payment Receipt (${reference})`,
     html,
@@ -346,5 +343,5 @@ module.exports = {
   sendPaymentResultEmail,
   sendCoachPaymentEmail,
   sendAccountDeletionNoticeEmail,
-  sendPaymentReceiptEmail, // ✅ NEW
+  sendPaymentReceiptEmail,
 };
