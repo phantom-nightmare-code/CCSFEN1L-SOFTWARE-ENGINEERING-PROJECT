@@ -86,7 +86,7 @@ router.post('/', authenticate, async (req, res, next) => {
       );
     }
 
-    // ✅ NEW: Send receipt immediately if payment is instantly paid (cash/card)
+    // ✅ Send receipt immediately if payment is instantly paid (cash/card)
     if (!needsVerification) {
       try {
         const { sendPaymentReceiptEmail } = require('../services/mailer');
@@ -113,7 +113,6 @@ router.post('/', authenticate, async (req, res, next) => {
     }
 
     // Email for methods needing verification — fire-and-forget
-    // So the HTTP response returns immediately and the QR modal opens
     if (needsVerification) {
       emailVerificationFor(payment, parseEmails(sendTo))
         .then(() => console.log(`[mailer] ✅ QR emailed for ${payment.reference}`))
@@ -200,13 +199,63 @@ router.post('/:id/resend-email', authenticate, async (req, res, next) => {
 });
 
 /* ============================================================
-   GET /api/payments/me
+   GET /api/payments/me (User's own transaction history)
    ============================================================ */
 router.get('/me', authenticate, async (req, res, next) => {
   try {
-    const list = await PaymentLog.find({ userId: req.user.id })
-      .sort({ createdAt: -1 }).limit(50).lean();
-    res.json(list);
+    // 1. Get standard payments from MongoDB
+    const mongoPayments = await PaymentLog.find({ userId: req.user.id })
+      .sort({ createdAt: -1 }).lean();
+
+    // 2. Get coach payments from MySQL
+    const [coachPayments] = await pool.query(
+      `SELECT cp.*, c.full_name AS coach_name 
+       FROM coach_payments cp
+       JOIN users c ON c.id = cp.coach_id
+       WHERE cp.member_id = ?`,
+      [req.user.id]
+    );
+
+    // 3. Format both into a unified list
+    const formattedMongo = mongoPayments.map(p => ({
+      id: p._id.toString(),
+      reference: p.reference,
+      amount: Number(p.amount || 0),
+      method: p.method,
+      purpose: p.purpose,
+      status: p.status,
+      date: p.createdAt,
+      details: p.details,
+      source: 'system'
+    }));
+
+    const formattedCoach = coachPayments.map(p => ({
+      id: `coach-${p.id}`,
+      reference: p.reference || `COACH-${p.id}`,
+      amount: Number(p.amount || 0),
+      method: p.method,
+      purpose: 'coach_payment',
+      status: p.status,
+      date: p.created_at,
+      details: { coachName: p.coach_name, hours: p.hours, rate: p.rate },
+      source: 'coach'
+    }));
+
+    // 4. Combine and sort by date (newest first)
+    const allTransactions = [...formattedMongo, ...formattedCoach].sort(
+      (a, b) => new Date(b.date) - new Date(a.date)
+    );
+
+    // 5. Calculate total spent (only count successful payments)
+    const totalSpent = allTransactions
+      .filter(t => t.status === 'paid')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    res.json({
+      transactions: allTransactions,
+      totalSpent,
+      count: allTransactions.length,
+    });
   } catch (err) { next(err); }
 });
 
