@@ -239,8 +239,6 @@ export default function Admin() {
     });
   };
 
-  const totalRevenue = payments.filter(p => p.status === 'paid').reduce((s, p) => s + Number(p.amount || 0), 0);
-  const refundedTotal = payments.filter(p => p.status === 'refunded').reduce((s, p) => s + Number(p.amount || 0), 0);
   const filteredUser = filterUser ? userMap[filterUser] : null;
 
   const TABS = [
@@ -535,10 +533,11 @@ export default function Admin() {
           {/* PLATFORM PAYMENTS */}
           {paymentsSubTab === 'platform' && (
             <>
-              <div className="grid md:grid-cols-4 gap-4">
-                <Card label="Total Payments" value={payments.length} />
-                <Card label="Net Revenue"    value={`₱${totalRevenue.toFixed(2)}`} />
-                <Card label="Refunded"       value={`₱${refundedTotal.toFixed(2)}`} />
+              <div className="grid md:grid-cols-5 gap-4">
+                <Card label="Total Payments" value={aggregate ? aggregate.totalTransactions : '…'} />
+                <Card label="Net Revenue"    value={aggregate ? `₱${Number(aggregate.totalSpent).toFixed(2)}` : '…'} />
+                <Card label="Refunded"       value={aggregate ? `₱${Number(aggregate.totalRefunded).toFixed(2)}` : '…'} />
+                <Card label="Refunded Transactions" value={aggregate ? aggregate.refundedTransactionsCount : '…'} />
                 <Card label="Unique Users"   value={new Set(payments.map(p => p.userId)).size} />
               </div>
               <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">

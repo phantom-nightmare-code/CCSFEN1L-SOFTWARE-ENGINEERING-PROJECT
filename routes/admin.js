@@ -27,6 +27,7 @@ router.get('/stats/aggregate', async (_req, res, next) => {
       .reduce((s, p) => s + Number(p.amount || 0), 0);
 
     const totalTransactions = payments.length;
+    const refundedTransactionsCount = payments.filter(p => p.status === 'refunded').length;
     const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
 
     const [[{ activeRentals }]] = await pool.query(
@@ -36,7 +37,7 @@ router.get('/stats/aggregate', async (_req, res, next) => {
 
     res.json({
       totalSpent, totalRefunded, totalTransactions,
-      activeRentals, pendingPayments: pendingPaymentsCount,
+      refundedTransactionsCount, activeRentals, pendingPayments: pendingPaymentsCount,
     });
   } catch (err) { next(err); }
 });

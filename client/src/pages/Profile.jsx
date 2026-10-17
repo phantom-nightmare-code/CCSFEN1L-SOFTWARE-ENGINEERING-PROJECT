@@ -188,23 +188,23 @@ export default function Profile() {
         ) : (
           <>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
-              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Total Spent</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 min-h-8">Total Spent</p>
               <p className="text-green-400 font-bold text-2xl">₱{totalSpent.toFixed(2)}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
-              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Transactions</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 min-h-8">Transactions</p>
               <p className="text-blue-400 font-bold text-2xl">{transactions.length}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
-              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Refunded Transactions</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 min-h-8">Refunded Transactions</p>
               <p className="text-red-400 font-bold text-2xl">{refundedCount}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
-              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Active Rentals</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 min-h-8">Active Rentals</p>
               <p className="text-orange-400 font-bold text-2xl">0</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
-              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Member Since</p>
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1 min-h-8">Member Since</p>
               <p className="text-gray-200 font-bold text-2xl">{formatDate(coachDetails.created_at)}</p>
             </div>
           </>
