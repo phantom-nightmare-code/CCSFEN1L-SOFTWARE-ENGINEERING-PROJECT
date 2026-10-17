@@ -1,11 +1,26 @@
-function inactivityDaysSince(lastLoginAt, createdAt, now = new Date()) {
-  const referenceDate = lastLoginAt || createdAt;
-  if (!referenceDate) return null;
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+const DELETION_INACTIVITY_MS = 7 * 24 * 60 * 60 * 1000;
 
-  const timestamp = new Date(referenceDate).getTime();
-  if (!Number.isFinite(timestamp)) return null;
+function presenceStatus(lastSeenAt, now = new Date()) {
+  if (!lastSeenAt) {
+    return { status: 'unknown', offlineDays: null, offlineDurationMs: null };
+  }
 
-  return Math.max(0, Math.floor((now.getTime() - timestamp) / 86_400_000));
+  const lastSeenTime = new Date(lastSeenAt).getTime();
+  if (!Number.isFinite(lastSeenTime)) {
+    return { status: 'unknown', offlineDays: null, offlineDurationMs: null };
+  }
+
+  const elapsedMs = Math.max(0, now.getTime() - lastSeenTime);
+  if (elapsedMs <= ONLINE_WINDOW_MS) {
+    return { status: 'online', offlineDays: 0, offlineDurationMs: 0 };
+  }
+
+  return {
+    status: 'offline',
+    offlineDays: Math.floor(elapsedMs / 86_400_000),
+    offlineDurationMs: elapsedMs,
+  };
 }
 
 function canScheduleInactiveAccountDeletion({
@@ -13,13 +28,20 @@ function canScheduleInactiveAccountDeletion({
   userId,
   adminId,
   pendingDeletionAt,
-  inactivityDays,
+  status,
+  offlineDurationMs,
 }) {
   return role !== 'admin' &&
     Number(userId) !== Number(adminId) &&
     !pendingDeletionAt &&
-    inactivityDays != null &&
-    inactivityDays > 7;
+    status === 'offline' &&
+    offlineDurationMs != null &&
+    offlineDurationMs > DELETION_INACTIVITY_MS;
 }
 
-module.exports = { inactivityDaysSince, canScheduleInactiveAccountDeletion };
+module.exports = {
+  ONLINE_WINDOW_MS,
+  DELETION_INACTIVITY_MS,
+  presenceStatus,
+  canScheduleInactiveAccountDeletion,
+};

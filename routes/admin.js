@@ -2,13 +2,14 @@ const express = require('express');
 const crypto = require('crypto');
 const pool = require('../db/mysql');
 const ActivityLog = require('../models/mongo/ActivityLog');
+const AccountPresence = require('../models/mongo/AccountPresence');
 const AdminMetric = require('../models/mongo/AdminMetric');
 const PaymentLog = require('../models/mongo/PaymentLog');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logAdminAction } = require('../services/auditLogger');
 const { buildClientUrl } = require('../services/clientUrl');
 const {
-  inactivityDaysSince,
+  presenceStatus,
   canScheduleInactiveAccountDeletion,
 } = require('../services/accountActivity');
 
@@ -91,31 +92,31 @@ router.get('/users/activity-status', async (req, res, next) => {
        FROM users
        ORDER BY id DESC`
     );
-    const loginDates = await ActivityLog.aggregate([
-      { $match: { action: 'login', userId: { $ne: null } } },
-      { $group: { _id: '$userId', lastLoginAt: { $max: '$createdAt' } } },
-    ]);
-    const loginDateByUser = new Map(
-      loginDates.map(row => [Number(row._id), row.lastLoginAt])
+    const presenceRecords = await AccountPresence.find({}, {
+      userId: 1,
+      lastSeenAt: 1,
+    }).lean();
+    const presenceByUser = new Map(
+      presenceRecords.map(record => [Number(record.userId), record.lastSeenAt])
     );
     const now = new Date();
 
     res.json(users.map(user => {
-      const lastLoginAt = loginDateByUser.get(Number(user.id)) || null;
-      const inactivityDays = inactivityDaysSince(lastLoginAt, user.created_at, now);
+      const lastSeenAt = presenceByUser.get(Number(user.id)) || null;
+      const presence = presenceStatus(lastSeenAt, now);
       return {
         ...user,
-        lastLoginAt,
-        inactivityDays,
-        accountStatus: inactivityDays == null
-          ? 'unknown'
-          : inactivityDays <= 7 ? 'active' : 'inactive',
+        lastSeenAt,
+        presenceStatus: presence.status,
+        offlineDays: presence.offlineDays,
+        offlineDurationMs: presence.offlineDurationMs,
         canScheduleDeletion: canScheduleInactiveAccountDeletion({
           role: user.role,
           userId: user.id,
           adminId: req.user.id,
           pendingDeletionAt: user.pending_deletion_at,
-          inactivityDays,
+          status: presence.status,
+          offlineDurationMs: presence.offlineDurationMs,
         }),
       };
     }));

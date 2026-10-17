@@ -145,11 +145,9 @@ export default function Admin() {
   };
 
   const scheduleInactiveDeletion = async (account) => {
-    if (!account.canScheduleDeletion || account.inactivityDays == null) return;
-    const lastLogin = account.lastLoginAt
-      ? new Date(account.lastLoginAt).toLocaleString()
-      : 'never logged in';
-    const reason = `Inactive for ${account.inactivityDays} days. Last login: ${lastLogin}.`;
+    if (!account.canScheduleDeletion || account.offlineDays == null) return;
+    const lastSeen = new Date(account.lastSeenAt).toLocaleString();
+    const reason = `Offline for more than 7 days. Last seen online: ${lastSeen}.`;
     if (!confirm(
       `Schedule account deletion for ${displayName(account)}? ` +
       'They will be emailed and have 7 days to revoke the request.'
@@ -362,7 +360,7 @@ export default function Admin() {
             <h3 className="text-xl font-semibold mb-3">Users who used the website ({users.length})</h3>
             <div className="grid md:grid-cols-2 gap-3">
               {users.map(u => {
-                const accountStatus = accountActivityMap[u.id];
+                const accountPresence = accountActivityMap[u.id];
                 return (
                   <button key={u.id} onClick={() => setDetailUser(u.id)}
                     className="text-left p-4 bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 flex items-center gap-4 hover:border-brand-500 transition">
@@ -373,9 +371,11 @@ export default function Admin() {
                       <div className="font-semibold truncate">{displayName(u)}{u.id === me?.id && <span className="text-xs text-brand-600 ml-1">(you)</span>}</div>
                       <div className="text-xs text-gray-500 truncate">{u.email}</div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        {accountStatus?.lastLoginAt
-                          ? `Last login: ${new Date(accountStatus.lastLoginAt).toLocaleDateString()} · ${accountStatus.inactivityDays} day(s) ago`
-                          : accountStatus ? 'Never logged in' : 'Activity status unavailable'}
+                        {accountPresence?.presenceStatus === 'online'
+                          ? 'Online now'
+                          : accountPresence?.presenceStatus === 'offline'
+                            ? `Last online: ${new Date(accountPresence.lastSeenAt).toLocaleDateString()} · ${accountPresence.offlineDays} day(s) ago`
+                            : 'Presence not yet recorded'}
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-xs shrink-0 ${
@@ -521,7 +521,7 @@ export default function Admin() {
           <div>
             <h2 className="text-xl font-semibold">Account Activity</h2>
             <p className="text-sm text-gray-500 mt-1">
-              Activity is based on last login, not live online presence. Accounts inactive for more than 7 days can be scheduled for deletion, with a 7-day email notice and revocation window.
+              Online means the account has the app open in a visible browser tab and sent a heartbeat within the last 2 minutes. Offline duration starts from the last heartbeat. Accounts offline for more than 7 full days can be scheduled for deletion, with a 7-day email notice and revocation window.
             </p>
           </div>
           <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
@@ -530,8 +530,8 @@ export default function Admin() {
                 <tr className="text-left border-b border-gray-100 dark:border-gray-800">
                   <th className="p-3">Account</th>
                   <th>Role</th>
-                  <th>Last login</th>
-                  <th>Inactive for</th>
+                  <th>Last seen online</th>
+                  <th>Offline for</th>
                   <th>Status</th>
                   <th className="pr-3">Action</th>
                 </tr>
@@ -545,24 +545,30 @@ export default function Admin() {
                     </td>
                     <td className="capitalize">{account.role}</td>
                     <td className="text-gray-500">
-                      {account.lastLoginAt
-                        ? new Date(account.lastLoginAt).toLocaleString()
-                        : `Never logged in · registered ${new Date(account.created_at).toLocaleDateString()}`}
+                      {account.lastSeenAt
+                        ? new Date(account.lastSeenAt).toLocaleString()
+                        : 'No presence data yet'}
                     </td>
-                    <td>{account.inactivityDays == null ? 'Unknown' : `${account.inactivityDays} day(s)`}</td>
+                    <td>
+                      {account.offlineDays == null
+                        ? '—'
+                        : account.offlineDays === 0
+                          ? 'Less than 1 day'
+                          : `${account.offlineDays} day(s)`}
+                    </td>
                     <td>
                       <span className={`px-2 py-0.5 rounded text-xs ${
                         account.pending_deletion_at
                           ? 'bg-yellow-100 text-yellow-800'
-                          : account.accountStatus === 'active'
+                          : account.presenceStatus === 'online'
                             ? 'bg-green-100 text-green-800'
-                            : account.accountStatus === 'inactive'
+                            : account.presenceStatus === 'offline'
                               ? 'bg-red-100 text-red-800'
                               : 'bg-gray-100 text-gray-700'
                       }`}>
                         {account.pending_deletion_at
                           ? 'deletion scheduled'
-                          : account.accountStatus}
+                          : account.presenceStatus}
                       </span>
                     </td>
                     <td className="text-right pr-3">

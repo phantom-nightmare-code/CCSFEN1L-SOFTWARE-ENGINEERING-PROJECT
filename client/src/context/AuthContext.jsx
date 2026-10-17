@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import api from '../api';
 
 const AuthCtx = createContext();
@@ -7,6 +7,7 @@ export const useAuth = () => useContext(AuthCtx);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const heartbeatFailureLogged = useRef(false);
 
   const refresh = async () => {
     try {
@@ -28,6 +29,38 @@ export function AuthProvider({ children }) {
     refresh().finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!user) return undefined;
+
+    let stopped = false;
+    const sendHeartbeat = async () => {
+      if (stopped || document.visibilityState !== 'visible') return;
+      try {
+        await api.post('/presence/heartbeat');
+        heartbeatFailureLogged.current = false;
+      } catch (error) {
+        if (!heartbeatFailureLogged.current) {
+          console.error('Presence heartbeat failed:', error.message);
+          heartbeatFailureLogged.current = true;
+        }
+      }
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') sendHeartbeat();
+    };
+
+    sendHeartbeat();
+    const intervalId = window.setInterval(sendHeartbeat, 30_000);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [user?.id]);
 
   const login = async (email, password) => {
     const { data } = await api.post('/auth/login', { email, password });
