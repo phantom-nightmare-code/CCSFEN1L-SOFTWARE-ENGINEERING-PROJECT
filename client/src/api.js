@@ -1,9 +1,12 @@
 import axios from 'axios';
 
-// In production, VITE_API_URL is set by Netlify (e.g. https://xxx.onrender.com/api)
-// In local dev, Vite's proxy handles /api → http://localhost:5000
+export const API_BASE_URL = import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD
+    ? 'https://fitforge-backend-wey2.onrender.com/api'
+    : '/api');
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: API_BASE_URL,
 });
 
 api.interceptors.request.use((cfg) => {

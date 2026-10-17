@@ -355,6 +355,7 @@ VITE_RECAPTCHA_SITE_KEY=<public-site-key>
 
 Create a reCAPTCHA v2 Checkbox site in the Google reCAPTCHA Admin Console and add `localhost` to its allowed domains for local development. Keep the secret key in the server `.env`; never expose it in a `VITE_` variable or client code. Copy the client variable into `client/.env`. Restart both servers after changing environment variables.
 For production, set `CLIENT_URL` to your deployed frontend origin and set `CORS_ORIGINS` to the comma-separated list of frontend origins that should be allowed to call the API.
+The client defaults to the published FitForge Render API in production; if you deploy the backend elsewhere, set the client build variable `VITE_API_URL` to the backend API base URL (including `/api`) in your frontend hosting settings.
 
 ### 4. Set Up the Database
 1. Start MySQL in XAMPP Control Panel
@@ -374,5 +375,4 @@ cd client
 npm run dev
 
 Open http://localhost:5173 in your browser.
-
 

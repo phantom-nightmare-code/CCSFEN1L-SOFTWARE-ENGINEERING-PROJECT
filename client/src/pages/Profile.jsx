@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; 
-
-const API_URL = import.meta.env.VITE_API_URL || '/api';
+import { useAuth } from '../context/AuthContext';
+import { API_BASE_URL } from '../api';
 
 export default function Profile() {
   const { user, setUser, isAdmin, token } = useAuth(); 
@@ -53,7 +52,7 @@ export default function Profile() {
       }
 
       // 1. Fetch profile info
-      const profileRes = await fetch(`${API_URL}/users/${user.id}`, {
+      const profileRes = await fetch(`${API_BASE_URL}/users/${user.id}`, {
         headers: { 'Authorization': `Bearer ${authToken}` },
         cache: 'no-store' 
       });
@@ -75,7 +74,7 @@ export default function Profile() {
       }
 
       // 2. Fetch transactions and total spent
-      const paymentRes = await fetch(`${API_URL}/payments/me`, {
+      const paymentRes = await fetch(`${API_BASE_URL}/payments/me`, {
         headers: { 'Authorization': `Bearer ${authToken}` },
         cache: 'no-store'
       });
@@ -109,7 +108,7 @@ export default function Profile() {
     
     setSaveLoading(true);
     try {
-      const response = await fetch(`${API_URL}/users/${user.id}/coach-details`, {
+      const response = await fetch(`${API_BASE_URL}/users/${user.id}/coach-details`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
