@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { API_BASE_URL } from '../api';
 
 export default function Profile() {
-  const { user, setUser, isAdmin, token } = useAuth(); 
+  const { user, setUser, token } = useAuth();
   const navigate = useNavigate();
   
   const [activeTab, setActiveTab] = useState('overview');
@@ -24,6 +24,7 @@ export default function Profile() {
   const [memberships, setMemberships] = useState([]);
 
   const isCoach = user?.role === 'coach';
+  const isAdmin = user?.role === 'admin';
   const refundedCount = transactions.filter(transaction => transaction.status === 'refunded').length;
   const today = new Date().toISOString().slice(0, 10);
   const activeMembership = memberships.find(membership =>
@@ -160,7 +161,7 @@ export default function Profile() {
   
   if (!user) return null;
 
-  const tabs = isCoach ? ['overview'] : ['overview', 'transactions', 'memberships', 'rentals'];
+  const tabs = isAdmin || isCoach ? ['overview'] : ['overview', 'transactions', 'memberships', 'rentals'];
 
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-5xl text-gray-200">
@@ -181,7 +182,22 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* SUMMARY CARDS */}
+      {isAdmin ? (
+        <section className="bg-gradient-to-br from-blue-950 to-gray-900 border border-blue-800 rounded-2xl p-8 md:p-12 mb-8 text-center shadow-xl">
+          <div className="text-5xl mb-4">🛡️</div>
+          <h2 className="text-3xl font-bold text-white mb-3">Administrator Account</h2>
+          <p className="text-gray-300 text-lg max-w-2xl mx-auto mb-6">
+            Admin accounts do not make transactions or use memberships. Manage payments, users, and reports from the admin panel.
+          </p>
+          <button
+            onClick={() => navigate('/admin')}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+          >
+            Open Admin Panel
+          </button>
+        </section>
+      ) : (
+      /* SUMMARY CARDS */
       <div className={`grid grid-cols-2 ${isCoach ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-4 mb-8`}>
         {isCoach ? (
           <>
@@ -227,6 +243,7 @@ export default function Profile() {
           </>
         )}
       </div>
+      )}
 
       {/* TABS NAVIGATION */}
       <div className="flex space-x-6 border-b border-gray-800 mb-6">
@@ -247,7 +264,7 @@ export default function Profile() {
 
       {/* TAB CONTENT */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        isAdmin ? null : <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* Account Details Card */}
           <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-6">

@@ -318,10 +318,11 @@ export default function Admin() {
               <h3 className="text-xl font-semibold">Platform-wide Statistics</h3>
               <button onClick={loadStatsOnly} className="text-xs text-brand-600 hover:underline">🔄 Refresh</button>
             </div>
-            <div className="grid md:grid-cols-4 gap-3">
+            <div className="grid md:grid-cols-5 gap-3">
               <Card label="Total Spent (all users)"  value={aggregate ? `₱${Number(aggregate.totalSpent).toFixed(2)}` : '…'} />
               <Card label="Refunded (all users)"     value={aggregate ? `₱${Number(aggregate.totalRefunded).toFixed(2)}` : '…'} />
-              <Card label="Transactions (all users)" value={aggregate ? aggregate.totalTransactions : '…'} />
+              <Card label="Transactions (all users)" value={aggregate ? Number(aggregate.totalTransactions) + Number(aggregate.totalCoachTransactions) : '…'} />
+              <Card label="Total Paid to Coaches" value={aggregate ? `₱${Number(aggregate.totalCoachPaid).toFixed(2)}` : '…'} />
               <Card label="Active Rentals (all users)" value={aggregate ? aggregate.activeRentals : '…'} />
             </div>
           </section>
@@ -524,9 +525,7 @@ export default function Admin() {
             </div>
             <div className="flex items-center gap-3">
               <button onClick={loadStatsOnly} className="text-xs text-brand-600 hover:underline">🔄 Refresh</button>
-              {paymentsSubTab === 'platform' && (
-                <button onClick={() => setShowClearModal(true)} className="text-xs text-red-600 hover:underline">🗑 Clear All Payments</button>
-              )}
+              <button onClick={() => setShowClearModal(true)} className="text-xs text-red-600 hover:underline">🗑 Clear All Transactions</button>
             </div>
           </div>
 
@@ -743,6 +742,12 @@ export default function Admin() {
             </select>
             {filterUser && <button onClick={() => setFilterUser('')} className="text-xs text-brand-600 hover:underline">Clear filter</button>}
             {filteredUser && <span className="text-xs text-gray-500 ml-auto">Showing for <b>{displayName(filteredUser)}</b></span>}
+            <button
+              onClick={() => setShowClearModal(true)}
+              className="text-xs text-red-600 hover:underline ml-auto"
+            >
+              🗑 Clear All Transactions
+            </button>
           </div>
 
           <section>

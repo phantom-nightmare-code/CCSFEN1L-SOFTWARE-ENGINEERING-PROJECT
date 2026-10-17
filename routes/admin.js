@@ -32,6 +32,13 @@ router.get('/stats/aggregate', async (_req, res, next) => {
     const uniqueUsersCount = new Set(payments.map(p => p.userId)).size;
     const pendingPaymentsCount = payments.filter(p => p.status === 'pending').length;
 
+    const [[coachPaymentTotals]] = await pool.query(
+      `SELECT COUNT(*) AS totalCoachTransactions,
+              COALESCE(SUM(CASE WHEN status = 'paid' THEN amount ELSE 0 END), 0) AS totalCoachPaid,
+              COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) AS totalCoachPending
+       FROM coach_payments`
+    );
+
     const [[{ activeRentals }]] = await pool.query(
       `SELECT COUNT(*) AS activeRentals FROM rentals
        WHERE status IN ('active','reserved','confirmed','hold')`
@@ -40,6 +47,9 @@ router.get('/stats/aggregate', async (_req, res, next) => {
     res.json({
       totalSpent, totalRefunded, totalTransactions,
       refundedTransactionsCount, uniqueUsersCount, activeRentals,
+      totalCoachTransactions: Number(coachPaymentTotals.totalCoachTransactions),
+      totalCoachPaid: Number(coachPaymentTotals.totalCoachPaid),
+      totalCoachPending: Number(coachPaymentTotals.totalCoachPending),
       pendingPayments: pendingPaymentsCount,
     });
   } catch (err) { next(err); }
@@ -783,30 +793,43 @@ router.delete('/payments/clear-all', async (req, res, next) => {
   try {
     const { confirmText } = req.body;
 
-    if (confirmText !== 'DELETE ALL PAYMENTS') {
+    if (confirmText !== 'DELETE ALL TRANSACTIONS') {
       return res.status(400).json({
-        error: 'Confirmation text does not match. Type "DELETE ALL PAYMENTS" exactly.',
+        error: 'Confirmation text does not match. Type "DELETE ALL TRANSACTIONS" exactly.',
       });
     }
 
-    const before = await PaymentLog.countDocuments();
+    const beforePlatformCount = await PaymentLog.countDocuments();
+    const [[{ beforeCoachCount }]] = await pool.query(
+      'SELECT COUNT(*) AS beforeCoachCount FROM coach_payments'
+    );
 
-    const result = await PaymentLog.deleteMany({});
+    const [coachResult] = await pool.query('DELETE FROM coach_payments');
+    const platformResult = await PaymentLog.deleteMany({});
     await AdminMetric.deleteMany({});
+    const deletedCount = Number(platformResult.deletedCount || 0) + Number(coachResult.affectedRows || 0);
 
     await logAdminAction({
       adminId: req.user.id,
-      action: 'all_payments_cleared',
-      targetType: 'payment_logs',
+      action: 'all_transactions_cleared',
+      targetType: 'transactions',
       targetId: 0,
-      details: { deletedCount: result.deletedCount, beforeCount: before },
+      details: {
+        deletedCount,
+        platformDeletedCount: Number(platformResult.deletedCount || 0),
+        coachDeletedCount: Number(coachResult.affectedRows || 0),
+        beforePlatformCount,
+        beforeCoachCount: Number(beforeCoachCount),
+      },
       req,
     });
 
     res.json({
       ok: true,
-      deletedCount: result.deletedCount,
-      message: `Cleared ${result.deletedCount} payment records.`,
+      deletedCount,
+      platformDeletedCount: Number(platformResult.deletedCount || 0),
+      coachDeletedCount: Number(coachResult.affectedRows || 0),
+      message: `Cleared ${deletedCount} transactions (${Number(platformResult.deletedCount || 0)} platform, ${Number(coachResult.affectedRows || 0)} coach).`,
     });
   } catch (err) { next(err); }
 });
@@ -1048,7 +1071,7 @@ router.get('/coach-payments', async (_req, res, next) => {
        FROM coach_payments cp
        JOIN users m ON m.id = cp.member_id
        JOIN users c ON c.id = cp.coach_id
-       ORDER BY cp.created_at DESC LIMIT 500`
+       ORDER BY cp.created_at DESC`
     );
 
     const totalPaid = rows

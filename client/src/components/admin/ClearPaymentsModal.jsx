@@ -7,7 +7,7 @@ export default function ClearPaymentsModal({ onClose, onCleared }) {
   const [busy, setBusy] = useState(false);
   const { showToast } = useToast();
 
-  const canDelete = confirmText === 'DELETE ALL PAYMENTS';
+  const canDelete = confirmText === 'DELETE ALL TRANSACTIONS';
 
   const clear = async () => {
     if (!canDelete) return;
@@ -35,29 +35,29 @@ export default function ClearPaymentsModal({ onClose, onCleared }) {
         onClick={e => e.stopPropagation()}
       >
         <h2 className="text-xl font-bold text-red-600 mb-2">
-          ⚠️ Clear All Payments
+          ⚠️ Clear All Transactions
         </h2>
 
         <div className="bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 rounded-lg p-3 mb-4 text-sm text-red-800 dark:text-red-200">
           <p className="font-medium mb-1">This action is permanent.</p>
           <p className="text-xs">It will delete:</p>
           <ul className="text-xs list-disc ml-5 mt-1 space-y-0.5">
-            <li>Every payment record (paid, pending, refunded, failed)</li>
+            <li>All platform payments and coach payment records for every user</li>
             <li>All daily revenue metrics</li>
           </ul>
           <p className="text-xs mt-2 font-medium">
-            Memberships, rentals, users, and workouts are NOT affected.
+            User and coach transaction totals will return to zero. Memberships, rentals, users, and workouts are NOT deleted.
           </p>
         </div>
 
         <label className="block text-sm font-medium mb-1">
-          Type <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">DELETE ALL PAYMENTS</code> to confirm:
+          Type <code className="bg-gray-100 dark:bg-gray-800 px-1 rounded">DELETE ALL TRANSACTIONS</code> to confirm:
         </label>
         <input
           type="text"
           value={confirmText}
           onChange={e => setConfirmText(e.target.value)}
-          placeholder="DELETE ALL PAYMENTS"
+          placeholder="DELETE ALL TRANSACTIONS"
           className="w-full border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700 mb-4 font-mono"
           autoFocus
         />
@@ -68,7 +68,7 @@ export default function ClearPaymentsModal({ onClose, onCleared }) {
             disabled={!canDelete || busy}
             className="flex-1 bg-red-600 text-white py-2 rounded hover:bg-red-700 disabled:opacity-40"
           >
-            {busy ? 'Clearing…' : 'Clear All Payments'}
+            {busy ? 'Clearing…' : 'Clear All Transactions'}
           </button>
           <button
             onClick={onClose}

@@ -364,7 +364,9 @@ The client defaults to the published FitForge Render API in production; if you d
 
 3. Create a database named fitforge
 
-4. Import the SQL migration files in `db/migrations/` in numeric order. For an existing database, run any migrations it has not applied yet, including `006_coach_feedback_threads.sql` to enable coach feedback replies and close states.
+4. Import the SQL migration files in `db/migrations/` in numeric order. For an existing database, run any migrations it has not applied yet, including `006_coach_feedback_threads.sql` for coach feedback replies and `007_coach_payments.sql` for coach payment records.
+
+The Admin Panel's **Clear All Transactions** action permanently clears both platform and coach payment records for all users and resets payment totals. Membership, rental, user, and workout records are retained.
 
 ### 5. Run the App
 # Terminal 1 — Backend
