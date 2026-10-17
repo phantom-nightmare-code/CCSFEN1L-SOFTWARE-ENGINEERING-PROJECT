@@ -64,8 +64,12 @@ export default function Profile() {
           expertise: data.expertise || '',
           created_at: data.created_at || data.createdAt || null
         });
-        if (setUser && data.full_name) {
-          setUser(prev => ({ ...prev, full_name: data.full_name }));
+        if (setUser && data.full_name && data.full_name !== user.full_name) {
+          setUser(prev => (
+            prev?.id === user.id && prev.full_name !== data.full_name
+              ? { ...prev, full_name: data.full_name }
+              : prev
+          ));
         }
       }
 
@@ -95,7 +99,7 @@ export default function Profile() {
       return;
     }
     fetchData();
-  }, [user, navigate, token]);
+  }, [user?.id, navigate]);
 
   // --- SAVE PROFILE CHANGES ---
   const handleSaveProfile = async () => {
