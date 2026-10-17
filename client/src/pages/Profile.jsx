@@ -24,6 +24,7 @@ export default function Profile() {
   const [totalSpent, setTotalSpent] = useState(0);
 
   const isCoach = user?.role === 'coach';
+  const refundedCount = transactions.filter(transaction => transaction.status === 'refunded').length;
 
   // --- BULLETPROOF DATE FORMATTING ---
   const formatDate = (dateString) => {
@@ -164,7 +165,7 @@ export default function Profile() {
       </div>
 
       {/* SUMMARY CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+      <div className={`grid grid-cols-2 ${isCoach ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-4 mb-8`}>
         {isCoach ? (
           <>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
@@ -193,6 +194,10 @@ export default function Profile() {
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Transactions</p>
               <p className="text-blue-400 font-bold text-2xl">{transactions.length}</p>
+            </div>
+            <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
+              <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Refunded Transactions</p>
+              <p className="text-red-400 font-bold text-2xl">{refundedCount}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Active Rentals</p>
