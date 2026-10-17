@@ -106,8 +106,9 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 - Non-blocking email sending — API responds instantly
 
 ### 🎵 Music
-- A music-note toggle in the navigation plays the user-provided track through YouTube's embedded player
-- Playback starts only after the user turns music on; the embedded YouTube controls remain available
+- A music-note toggle in the navigation plays or pauses either of the two user-provided MP3 tracks
+- Choose between tracks from the compact music menu; playback starts only after the user turns it on
+- MP3s are hosted in Cloudflare R2 because Cloudflare Pages limits each static asset to 25 MiB
 
 ### 🏋️ Equipment Rentals
 - 8 seeded rental items with hourly pricing
@@ -368,6 +369,16 @@ VITE_RECAPTCHA_SITE_KEY=<public-site-key>
 Create a reCAPTCHA v2 Checkbox site in the Google reCAPTCHA Admin Console and add `localhost` to its allowed domains for local development. Keep the secret key in the server `.env`; never expose it in a `VITE_` variable or client code. Copy the client variable into `client/.env`. Restart both servers after changing environment variables.
 For production, set `CLIENT_URL` to your deployed frontend origin and set `CORS_ORIGINS` to the comma-separated list of frontend origins that should be allowed to call the API.
 The client defaults to the published FitForge Render API in production; if you deploy the backend elsewhere, set the client build variable `VITE_API_URL` to the backend API base URL (including `/api`) in your frontend hosting settings.
+
+### 🎵 Configure music hosting
+1. Create a public Cloudflare R2 bucket and upload the two licensed MP3 files with these object names:
+   - `music-for-when-you-need-to-escape-reality.mp3`
+   - `endless-dream.mp3`
+2. Configure a public custom domain for the bucket (or use its public R2 URL).
+3. Set `VITE_MUSIC_TRACK_ESCAPE_URL` and `VITE_MUSIC_TRACK_ENDLESS_URL` in the Cloudflare Pages project’s build environment variables to the full public URLs of their MP3 objects. For local development, copy the keys from `client/.env.example` into `client/.env` and replace the example URLs.
+4. Trigger a fresh Pages build. The music-note toggle then starts/pauses playback; use the menu next to it to switch tracks.
+
+The original MP3s are intentionally not stored in the Pages `public` folder: both exceed the Pages 25 MiB per-file asset limit. The music control reports a setup message until public track URLs are configured.
 
 ### 4. Set Up the Database
 1. Start MySQL in XAMPP Control Panel

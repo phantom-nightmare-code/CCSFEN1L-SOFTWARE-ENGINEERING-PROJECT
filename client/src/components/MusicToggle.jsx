@@ -1,155 +1,149 @@
-import { useEffect, useId, useState } from 'react';
+import { useRef, useState } from 'react';
 
-const VIDEO_ID = 'g33LSGLwLzo';
-const IFRAME_API_URL = 'https://www.youtube.com/iframe_api';
-
-let iframeApiPromise;
-
-function loadIframeApi() {
-  if (window.YT?.Player) return Promise.resolve(window.YT);
-  if (iframeApiPromise) return iframeApiPromise;
-
-  iframeApiPromise = new Promise((resolve, reject) => {
-    const previousCallback = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      previousCallback?.();
-      if (window.YT?.Player) resolve(window.YT);
-      else reject(new Error('YouTube player API did not initialize'));
-    };
-
-    let script = document.querySelector(`script[src="${IFRAME_API_URL}"]`);
-    if (!script) {
-      script = document.createElement('script');
-      script.src = IFRAME_API_URL;
-      script.async = true;
-      document.head.appendChild(script);
-    }
-    script.addEventListener('error', () => {
-      iframeApiPromise = null;
-      script.remove();
-      reject(new Error('Could not load the YouTube player'));
-    }, { once: true });
-  });
-
-  return iframeApiPromise;
-}
+const TRACKS = [
+  {
+    title: 'Music for when you need to escape reality',
+    url: import.meta.env.VITE_MUSIC_TRACK_ESCAPE_URL,
+  },
+  {
+    title: 'Endless Dream',
+    url: import.meta.env.VITE_MUSIC_TRACK_ENDLESS_URL,
+  },
+];
 
 export default function MusicToggle() {
-  const playerId = `fitforge-music-${useId().replace(/:/g, '')}`;
-  const [enabled, setEnabled] = useState(false);
-  const [playerReady, setPlayerReady] = useState(false);
+  const audioRef = useRef(null);
+  const loadedTrack = useRef(null);
+  const playRequest = useRef(0);
+  const [trackIndex, setTrackIndex] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    if (!enabled) return undefined;
+  const startPlayback = async (index) => {
+    const requestId = ++playRequest.current;
+    const track = TRACKS[index];
+    const audio = audioRef.current;
+    if (!audio) return;
 
-    let disposed = false;
-    let player;
+    if (!track.url) {
+      setError('Add this track’s public R2 URL in the Cloudflare Pages environment variables.');
+      setPanelOpen(true);
+      setPlaying(false);
+      return;
+    }
 
-    loadIframeApi()
-      .then(YT => {
-        if (disposed) return;
-        player = new YT.Player(playerId, {
-          width: '100%',
-          height: '200',
-          videoId: VIDEO_ID,
-          playerVars: {
-            autoplay: 1,
-            controls: 1,
-            loop: 1,
-            playlist: VIDEO_ID,
-            playsinline: 1,
-            rel: 0,
-          },
-          events: {
-            onReady: event => {
-              setPlayerReady(true);
-              event.target.playVideo();
-            },
-            onError: () => {
-              setError('YouTube could not play this video. Check that the video is available and try again.');
-              setEnabled(false);
-            },
-          },
-        });
-      })
-      .catch(loadError => {
-        if (!disposed) {
-          console.error('Music player failed to load:', loadError.message);
-          setError('Music player could not load. Check your connection and try again.');
-          setEnabled(false);
-        }
-      });
+    if (loadedTrack.current !== index) {
+      audio.pause();
+      audio.src = track.url;
+      audio.load();
+      loadedTrack.current = index;
+    }
 
-    return () => {
-      disposed = true;
-      player?.destroy();
-      setPlayerReady(false);
-    };
-  }, [enabled, playerId]);
+    try {
+      await audio.play();
+      if (playRequest.current !== requestId) {
+        audio.pause();
+        return;
+      }
+      setError('');
+      setPlaying(true);
+    } catch (playError) {
+      if (playRequest.current !== requestId) return;
+      console.error('Music playback failed:', playError.message);
+      setError('Could not play this track. Check its R2 URL and public access.');
+      setPlaying(false);
+      setPanelOpen(true);
+    }
+  };
 
-  const toggleMusic = () => {
+  const togglePlayback = () => {
+    const audio = audioRef.current;
+    if (playing) {
+      playRequest.current += 1;
+      audio?.pause();
+      setPlaying(false);
+      setError('');
+      return;
+    }
+
+    setPanelOpen(true);
+    startPlayback(trackIndex);
+  };
+
+  const selectTrack = event => {
+    const nextIndex = Number(event.target.value);
+    const resumePlayback = playing;
+    const audio = audioRef.current;
+    playRequest.current += 1;
+    audio?.pause();
+    setPlaying(false);
     setError('');
-    setEnabled(value => !value);
+    setTrackIndex(nextIndex);
+    loadedTrack.current = null;
+    if (resumePlayback) startPlayback(nextIndex);
   };
 
   return (
     <>
-      <button
-        type="button"
-        onClick={toggleMusic}
-        aria-label={enabled ? 'Turn music off' : 'Turn music on'}
-        aria-pressed={enabled}
-        title={enabled ? 'Turn music off' : 'Turn music on'}
-        className={`w-9 h-9 rounded border flex items-center justify-center transition ${
-          enabled
-            ? 'border-brand-500 text-brand-600 bg-brand-50 dark:bg-brand-900/30'
-            : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
-        }`}
-      >
-        <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
-          <path d="M12 3v12.28A4 4 0 1 0 14 19V7h6V3h-8Z" />
-          {!enabled && (
-            <path d="m3 4.4 1.4-1.4L21 19.6 19.6 21 3 4.4Z" />
-          )}
-        </svg>
-      </button>
-
-      {(enabled || error) && (
-        <section
-          aria-label="FitForge music player"
-          className="fixed bottom-4 right-4 z-50 w-[320px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-900"
+      <audio ref={audioRef} preload="none" loop onError={() => {
+        setPlaying(false);
+        setError('Could not load this track. Check its R2 URL and public access.');
+        setPanelOpen(true);
+      }} />
+      <div className="relative">
+        <button
+          type="button"
+          onClick={togglePlayback}
+          aria-label={playing ? 'Turn music off' : 'Turn music on'}
+          aria-pressed={playing}
+          title={playing ? 'Turn music off' : 'Turn music on'}
+          className={`w-9 h-9 rounded border flex items-center justify-center transition ${
+            playing
+              ? 'border-brand-500 text-brand-600 bg-brand-50 dark:bg-brand-900/30'
+              : 'border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800'
+          }`}
         >
-          <div className="flex items-center justify-between gap-3 px-3 py-2">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">FitForge music</p>
-              <p className="truncate text-xs text-gray-500">
-                {error || (playerReady ? 'YouTube' : 'Loading YouTube player…')}
-              </p>
+          <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor" aria-hidden="true">
+            <path d="M12 3v12.28A4 4 0 1 0 14 19V7h6V3h-8Z" />
+            {!playing && <path d="m3 4.4 1.4-1.4L21 19.6 19.6 21 3 4.4Z" />}
+          </svg>
+        </button>
+
+        {panelOpen && (
+          <section
+            aria-label="Music selection"
+            className="absolute right-0 top-11 z-50 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-xl dark:border-gray-700 dark:bg-gray-900"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="fitforge-music-track" className="text-sm font-semibold">
+                FitForge music
+              </label>
+              <button
+                type="button"
+                onClick={() => setPanelOpen(false)}
+                className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
+                aria-label="Close music menu"
+              >
+                Close
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setEnabled(false)}
-              className="shrink-0 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
-              aria-label="Close music player"
+            <select
+              id="fitforge-music-track"
+              value={trackIndex}
+              onChange={selectTrack}
+              className="mt-2 w-full rounded border border-gray-300 bg-white px-2 py-1.5 text-sm dark:border-gray-700 dark:bg-gray-800"
             >
-              Close
-            </button>
-          </div>
-          {enabled && (
-            <div id={playerId} className="h-[200px] w-full bg-black" />
-          )}
-          {error && (
-            <button
-              type="button"
-              onClick={toggleMusic}
-              className="m-3 rounded bg-brand-600 px-3 py-1.5 text-sm text-white hover:bg-brand-700"
-            >
-              Try again
-            </button>
-          )}
-        </section>
-      )}
+              {TRACKS.map((track, index) => (
+                <option key={track.title} value={index}>{track.title}</option>
+              ))}
+            </select>
+            <p className={`mt-2 text-xs ${error ? 'text-red-600' : 'text-gray-500'}`} role="status">
+              {error || (playing ? 'Playing' : 'Music is off')}
+            </p>
+          </section>
+        )}
+      </div>
     </>
   );
 }
