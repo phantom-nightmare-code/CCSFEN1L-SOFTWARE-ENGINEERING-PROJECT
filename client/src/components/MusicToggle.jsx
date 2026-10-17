@@ -63,12 +63,13 @@ export default function MusicToggle() {
   };
 
   return (
-    <div className="relative">
+    <div className="relative flex items-center gap-1">
       <audio
         ref={audioRef}
         src={TRACKS[trackIndex].url}
         preload="none"
         loop
+        className="hidden"
         onEnded={() => setPlaying(false)}
         onError={() => {
           setPlaying(false);
