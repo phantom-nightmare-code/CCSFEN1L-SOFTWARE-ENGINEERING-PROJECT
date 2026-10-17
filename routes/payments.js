@@ -207,14 +207,21 @@ router.get('/me', authenticate, async (req, res, next) => {
     const mongoPayments = await PaymentLog.find({ userId: req.user.id })
       .sort({ createdAt: -1 }).lean();
 
-    // 2. Get coach payments from MySQL
-    const [coachPayments] = await pool.query(
-      `SELECT cp.*, c.full_name AS coach_name 
-       FROM coach_payments cp
-       JOIN users c ON c.id = cp.coach_id
-       WHERE cp.member_id = ?`,
-      [req.user.id]
-    );
+    // 2. Get coach payments from MySQL (Wrapped in try/catch to prevent total failure)
+    let coachPayments = [];
+    try {
+      const [rows] = await pool.query(
+        `SELECT cp.*, c.full_name AS coach_name 
+         FROM coach_payments cp
+         JOIN users c ON c.id = cp.coach_id
+         WHERE cp.member_id = ?`,
+        [req.user.id]
+      );
+      coachPayments = rows;
+    } catch (sqlError) {
+      console.error("⚠️ Coach payments table missing or error:", sqlError.message);
+      // If this fails, we just proceed with an empty array for coach payments
+    }
 
     // 3. Format both into a unified list
     const formattedMongo = mongoPayments.map(p => ({
