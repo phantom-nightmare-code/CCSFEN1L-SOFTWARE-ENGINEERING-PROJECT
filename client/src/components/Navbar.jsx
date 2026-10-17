@@ -1,6 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import MusicToggle from './MusicToggle';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -58,6 +59,7 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3 shrink-0">
+          <MusicToggle />
           <button
             onClick={toggle}
             className="text-sm px-3 py-1 rounded border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 flex items-center gap-1.5"

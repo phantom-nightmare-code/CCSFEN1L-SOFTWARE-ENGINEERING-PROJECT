@@ -105,6 +105,10 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 - Pending payments queue in admin panel
 - Non-blocking email sending — API responds instantly
 
+### 🎵 Music
+- A music-note toggle in the navigation plays the user-provided track through YouTube's embedded player
+- Playback starts only after the user turns music on; the embedded YouTube controls remain available
+
 ### 🏋️ Equipment Rentals
 - 8 seeded rental items with hourly pricing
 - Live stock tracking — decremented on reserve, restored on return
