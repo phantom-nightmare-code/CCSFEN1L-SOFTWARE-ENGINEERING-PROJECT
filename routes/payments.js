@@ -207,7 +207,7 @@ router.get('/me', authenticate, async (req, res, next) => {
     const mongoPayments = await PaymentLog.find({ userId: req.user.id })
       .sort({ createdAt: -1 }).lean();
 
-    // 2. Get coach payments from MySQL (Wrapped in try/catch to prevent total failure)
+    // 2. Get coach payments from MySQL
     let coachPayments = [];
     try {
       const [rows] = await pool.query(
@@ -220,10 +220,21 @@ router.get('/me', authenticate, async (req, res, next) => {
       coachPayments = rows;
     } catch (sqlError) {
       console.error("⚠️ Coach payments table missing or error:", sqlError.message);
-      // If this fails, we just proceed with an empty array for coach payments
     }
 
-    // 3. Format both into a unified list
+    // 3. Get Memberships from MySQL (Fallback if PaymentLog is missing)
+    let userMemberships = [];
+    try {
+      const [rows] = await pool.query(
+        `SELECT * FROM memberships WHERE user_id = ?`,
+        [req.user.id]
+      );
+      userMemberships = rows;
+    } catch (sqlError) {
+      console.error("⚠️ Memberships table error:", sqlError.message);
+    }
+
+    // 4. Format everything into a unified list
     const formattedMongo = mongoPayments.map(p => ({
       id: p._id.toString(),
       reference: p.reference,
@@ -240,7 +251,7 @@ router.get('/me', authenticate, async (req, res, next) => {
       id: `coach-${p.id}`,
       reference: p.reference || `COACH-${p.id}`,
       amount: Number(p.amount || 0),
-      method: p.method,
+      method: p.method || 'cash',
       purpose: 'coach_payment',
       status: p.status,
       date: p.created_at,
@@ -248,13 +259,28 @@ router.get('/me', authenticate, async (req, res, next) => {
       source: 'coach'
     }));
 
-    // 4. Combine and sort by date (newest first)
-    const allTransactions = [...formattedMongo, ...formattedCoach].sort(
+    // Format memberships that don't have a corresponding PaymentLog
+    const formattedMemberships = userMemberships
+      .filter(m => !mongoPayments.some(p => p.purpose === 'membership' && p.referenceId === m.id)) // Avoid duplicates
+      .map(m => ({
+        id: `mem-${m.id}`,
+        reference: `MEM-${m.id.toString().padStart(5, '0')}`,
+        amount: 0, // Unknown price here, so put 0 to avoid double counting
+        method: 'walk-in', 
+        purpose: 'membership',
+        status: m.status,
+        date: m.created_at || m.start_date,
+        details: { type: m.type },
+        source: 'membership'
+      }));
+
+    // 5. Combine and sort by date (newest first)
+    const allTransactions = [...formattedMongo, ...formattedCoach, ...formattedMemberships].sort(
       (a, b) => new Date(b.date) - new Date(a.date)
     );
 
-    // 5. Calculate total spent (only count successful payments)
-    const totalSpent = allTransactions
+    // 6. Calculate total spent (only count successful payments from MongoDB and Coach payments)
+    const totalSpent = [...formattedMongo, ...formattedCoach]
       .filter(t => t.status === 'paid')
       .reduce((sum, t) => sum + t.amount, 0);
 
