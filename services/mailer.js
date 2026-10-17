@@ -1,5 +1,8 @@
-// Brevo HTTPS API — works on Render where SMTP is blocked
-const BREVO_API_URL = 'https://api.brevo.com/v3/smtp/email';
+const axios = require('axios');
+
+// Brevo is replaced by the Google Apps Script API
+const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
+const APPS_SCRIPT_TOKEN = process.env.APPS_SCRIPT_TOKEN;
 
 /* ---------- helpers ---------- */
 
@@ -15,56 +18,36 @@ function parseEmails(input) {
     .slice(0, 5);
 }
 
-function parseFrom(fromStr) {
-  if (!fromStr) return { name: 'FitForge', email: process.env.EMAIL_USER };
-  const match = fromStr.match(/^(.*)<(.+)>$/);
-  if (match) {
-    return { name: match[1].trim().replace(/^"|"$/g, ''), email: match[2].trim() };
-  }
-  return { name: 'FitForge', email: fromStr.trim() };
-}
-
-async function sendViaBrevo({ to, subject, html, cc }) {
-  const apiKey = process.env.BREVO_API_KEY;
-  if (!apiKey) throw new Error('BREVO_API_KEY is not set');
-
-  const sender = parseFrom(process.env.EMAIL_FROM);
-  const recipients = parseEmails(to).map(email => ({ email }));
+async function sendViaGmailApi({ to, subject, html, cc }) {
+  const recipients = parseEmails(to);
   if (!recipients.length) throw new Error('No valid recipients');
 
-  const body = {
-    sender,
-    to: recipients,
-    subject,
-    htmlContent: html,
-    trackClicks: false,
-    trackOpens: false,
-  };
+  // The Google Apps Script handles one recipient per call.
+  for (const recipient of recipients) {
+    const payload = {
+      token: APPS_SCRIPT_TOKEN,
+      to: recipient,
+      subject: subject,
+      htmlBody: html,
+      fromName: 'FitForge'
+    };
 
-  if (cc && cc.length) body.cc = cc.map(email => ({ email }));
+    console.log('[mailer] POST → Google Apps Script for:', recipient);
 
-  console.log('[mailer] POST → Brevo API', { to: recipients.map(r => r.email), subject });
-
-  const res = await fetch(BREVO_API_URL, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'api-key': apiKey,
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
-
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    const msg = data.message || data.error || `HTTP ${res.status}`;
-    console.error('[mailer] ❌ Brevo API error:', msg, data);
-    throw new Error(msg);
+    try {
+      const res = await axios.post(APPS_SCRIPT_URL, payload);
+      
+      if (!res.data.success) {
+        throw new Error(res.data.error || 'Unknown Gmail API error');
+      }
+      console.log('[mailer] ✅ Email sent to:', recipient);
+    } catch (error) {
+      console.error('[mailer] ❌ Gmail API error:', error.message);
+      throw error;
+    }
   }
-
-  console.log('[mailer] ✅ Brevo accepted:', data.messageId || '(no id)');
-  return data;
+  
+  return { success: true };
 }
 
 /* ---------- WELCOME / VERIFICATION ---------- */
@@ -100,7 +83,7 @@ async function sendWelcomeVerificationEmail({ to, fullName, verifyUrl }) {
       </p>
     </div>
   `;
-  return sendViaBrevo({ to, subject: 'Verify your FitForge account 💪', html });
+  return sendViaGmailApi({ to, subject: 'Verify your FitForge account 💪', html });
 }
 
 /* ---------- PAYMENT VERIFICATION ---------- */
@@ -109,7 +92,6 @@ async function sendPaymentVerificationEmail({
   to, additionalTo = [], qrDataUrl, reference,
   amount, method, purpose, itemName,
 }) {
-  const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const verifyUrl = `${process.env.CLIENT_URL}/verify-payment/${reference}`;
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
@@ -145,17 +127,14 @@ async function sendPaymentVerificationEmail({
     ...parseEmails(additionalTo),
   ];
   const uniqueRecipients = [...new Set(allRecipients)];
-  const cc = adminCc && EMAIL_RE.test(adminCc) && !uniqueRecipients.includes(adminCc.toLowerCase())
-    ? [adminCc] : [];
-  return sendViaBrevo({
+  return sendViaGmailApi({
     to: uniqueRecipients,
     subject: `FitForge — Verify your payment (${reference})`,
-    html, cc,
+    html,
   });
 }
 
 async function sendPaymentResultEmail({ to, reference, amount, status, reason }) {
-  const adminCc = (process.env.EMAIL_CC_ADMIN || '').trim();
   const ok = status === 'verified';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
@@ -171,13 +150,10 @@ async function sendPaymentResultEmail({ to, reference, amount, status, reason })
       <p style="color:#333;">— The FitForge Team</p>
     </div>
   `;
-  const primary = parseEmails(to);
-  const cc = adminCc && EMAIL_RE.test(adminCc) && !primary.includes(adminCc.toLowerCase())
-    ? [adminCc] : [];
-  return sendViaBrevo({
-    to: primary,
+  return sendViaGmailApi({
+    to,
     subject: `FitForge — Payment ${ok ? 'verified' : 'rejected'} (${reference})`,
-    html, cc,
+    html,
   });
 }
 
@@ -218,7 +194,7 @@ async function sendCoachPaymentEmail({
       </p>
     </div>
   `;
-  return sendViaBrevo({
+  return sendViaGmailApi({
     to,
     subject: `Coach payment receipt (${reference})`,
     html,
@@ -261,10 +237,10 @@ async function sendAccountDeletionNoticeEmail({
       </p>
     </div>
   `;
-  return sendViaBrevo({ to, subject: '⚠️ Your FitForge account is scheduled for deletion', html });
+  return sendViaGmailApi({ to, subject: '⚠️ Your FitForge account is scheduled for deletion', html });
 }
 
-/* ---------- PAYMENT RECEIPT (NEW) ---------- */
+/* ---------- PAYMENT RECEIPT ---------- */
 
 async function sendPaymentReceiptEmail({
   to, userName, reference, amount, method, purpose, date, itemName,
@@ -332,7 +308,7 @@ async function sendPaymentReceiptEmail({
     </div>
   `;
 
-  return sendViaBrevo({
+  return sendViaGmailApi({
     to,
     subject: `FitForge — Payment Receipt (${reference})`,
     html,
@@ -346,5 +322,5 @@ module.exports = {
   sendPaymentResultEmail,
   sendCoachPaymentEmail,
   sendAccountDeletionNoticeEmail,
-  sendPaymentReceiptEmail, // ✅ NEW
+  sendPaymentReceiptEmail,
 };
