@@ -16,7 +16,7 @@ export default function ClearPaymentsModal({ onClose, onCleared }) {
       const { data } = await api.delete('/admin/payments/clear-all', {
         data: { confirmText },
       });
-      showToast(data.message || `Cleared ${data.deletedCount} payments`);
+      showToast(data.message || `Cleared ${data.deletedCount} records`);
       onCleared?.();
     } catch (e) {
       showToast(e.response?.data?.error || 'Failed to clear payments', 'error');
@@ -43,10 +43,11 @@ export default function ClearPaymentsModal({ onClose, onCleared }) {
           <p className="text-xs">It will delete:</p>
           <ul className="text-xs list-disc ml-5 mt-1 space-y-0.5">
             <li>All platform payments and coach payment records for every user</li>
+            <li>All membership and rental records shown in Transactions</li>
             <li>All daily revenue metrics</li>
           </ul>
           <p className="text-xs mt-2 font-medium">
-            User and coach transaction totals will return to zero. Memberships, rentals, users, and workouts are NOT deleted.
+            User and coach totals will return to zero. Reserved rental stock is restored. Users, workouts, and rental inventory are retained.
           </p>
         </div>
 

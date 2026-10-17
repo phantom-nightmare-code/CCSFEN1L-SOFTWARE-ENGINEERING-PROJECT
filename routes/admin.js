@@ -38,6 +38,11 @@ router.get('/stats/aggregate', async (_req, res, next) => {
               COALESCE(SUM(CASE WHEN status = 'pending' THEN amount ELSE 0 END), 0) AS totalCoachPending
        FROM coach_payments`
     );
+    const [[otherTransactionTotals]] = await pool.query(
+      `SELECT
+         (SELECT COUNT(*) FROM memberships) AS totalMemberships,
+         (SELECT COUNT(*) FROM rentals) AS totalRentals`
+    );
 
     const [[{ activeRentals }]] = await pool.query(
       `SELECT COUNT(*) AS activeRentals FROM rentals
@@ -50,6 +55,12 @@ router.get('/stats/aggregate', async (_req, res, next) => {
       totalCoachTransactions: Number(coachPaymentTotals.totalCoachTransactions),
       totalCoachPaid: Number(coachPaymentTotals.totalCoachPaid),
       totalCoachPending: Number(coachPaymentTotals.totalCoachPending),
+      totalMemberships: Number(otherTransactionTotals.totalMemberships),
+      totalRentals: Number(otherTransactionTotals.totalRentals),
+      totalAllTransactions: totalTransactions +
+        Number(coachPaymentTotals.totalCoachTransactions) +
+        Number(otherTransactionTotals.totalMemberships) +
+        Number(otherTransactionTotals.totalRentals),
       pendingPayments: pendingPaymentsCount,
     });
   } catch (err) { next(err); }
@@ -790,6 +801,8 @@ router.get('/payments/pending', async (_req, res, next) => {
    ============================================================ */
 
 router.delete('/payments/clear-all', async (req, res, next) => {
+  let conn;
+  let transactionStarted = false;
   try {
     const { confirmText } = req.body;
 
@@ -799,15 +812,43 @@ router.delete('/payments/clear-all', async (req, res, next) => {
       });
     }
 
+    conn = await pool.getConnection();
+    await conn.beginTransaction();
+    transactionStarted = true;
+
     const beforePlatformCount = await PaymentLog.countDocuments();
-    const [[{ beforeCoachCount }]] = await pool.query(
-      'SELECT COUNT(*) AS beforeCoachCount FROM coach_payments'
+    const [[counts]] = await conn.query(
+      `SELECT
+         (SELECT COUNT(*) FROM coach_payments) AS coachPayments,
+         (SELECT COUNT(*) FROM memberships) AS memberships,
+         (SELECT COUNT(*) FROM rentals) AS rentals`
     );
 
-    const [coachResult] = await pool.query('DELETE FROM coach_payments');
+    await conn.query(
+      `UPDATE rental_items i
+       JOIN (
+         SELECT item_id, SUM(quantity) AS quantity
+         FROM rentals
+         WHERE status IN ('reserved', 'confirmed', 'hold', 'active')
+         GROUP BY item_id
+       ) r ON r.item_id = i.id
+       SET i.stock = i.stock + r.quantity`
+    );
+
+    await conn.query('DELETE FROM coach_payments');
+    await conn.query('DELETE FROM memberships');
+    await conn.query('DELETE FROM rentals');
     const platformResult = await PaymentLog.deleteMany({});
     await AdminMetric.deleteMany({});
-    const deletedCount = Number(platformResult.deletedCount || 0) + Number(coachResult.affectedRows || 0);
+    await conn.commit();
+    transactionStarted = false;
+
+    const platformDeletedCount = Number(platformResult.deletedCount || 0);
+    const coachDeletedCount = Number(counts.coachPayments || 0);
+    const membershipDeletedCount = Number(counts.memberships || 0);
+    const rentalDeletedCount = Number(counts.rentals || 0);
+    const deletedCount = platformDeletedCount + coachDeletedCount +
+      membershipDeletedCount + rentalDeletedCount;
 
     await logAdminAction({
       adminId: req.user.id,
@@ -816,10 +857,11 @@ router.delete('/payments/clear-all', async (req, res, next) => {
       targetId: 0,
       details: {
         deletedCount,
-        platformDeletedCount: Number(platformResult.deletedCount || 0),
-        coachDeletedCount: Number(coachResult.affectedRows || 0),
+        platformDeletedCount,
+        coachDeletedCount,
+        membershipDeletedCount,
+        rentalDeletedCount,
         beforePlatformCount,
-        beforeCoachCount: Number(beforeCoachCount),
       },
       req,
     });
@@ -827,11 +869,18 @@ router.delete('/payments/clear-all', async (req, res, next) => {
     res.json({
       ok: true,
       deletedCount,
-      platformDeletedCount: Number(platformResult.deletedCount || 0),
-      coachDeletedCount: Number(coachResult.affectedRows || 0),
-      message: `Cleared ${deletedCount} transactions (${Number(platformResult.deletedCount || 0)} platform, ${Number(coachResult.affectedRows || 0)} coach).`,
+      platformDeletedCount,
+      coachDeletedCount,
+      membershipDeletedCount,
+      rentalDeletedCount,
+      message: `Cleared ${deletedCount} records: ${platformDeletedCount} platform payments, ${coachDeletedCount} coach payments, ${membershipDeletedCount} memberships, and ${rentalDeletedCount} rentals.`,
     });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (transactionStarted && conn) await conn.rollback();
+    next(err);
+  } finally {
+    conn?.release();
+  }
 });
 
 router.patch('/payments/:id/verify', async (req, res, next) => {

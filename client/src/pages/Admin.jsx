@@ -321,7 +321,7 @@ export default function Admin() {
             <div className="grid md:grid-cols-5 gap-3">
               <Card label="Total Spent (all users)"  value={aggregate ? `₱${Number(aggregate.totalSpent).toFixed(2)}` : '…'} />
               <Card label="Refunded (all users)"     value={aggregate ? `₱${Number(aggregate.totalRefunded).toFixed(2)}` : '…'} />
-              <Card label="Transactions (all users)" value={aggregate ? Number(aggregate.totalTransactions) + Number(aggregate.totalCoachTransactions) : '…'} />
+              <Card label="Transactions (all users)" value={aggregate ? aggregate.totalAllTransactions : '…'} />
               <Card label="Total Paid to Coaches" value={aggregate ? `₱${Number(aggregate.totalCoachPaid).toFixed(2)}` : '…'} />
               <Card label="Active Rentals (all users)" value={aggregate ? aggregate.activeRentals : '…'} />
             </div>
@@ -877,7 +877,12 @@ export default function Admin() {
 
       {showClearModal && (
         <ClearPaymentsModal onClose={() => setShowClearModal(false)}
-          onCleared={() => { setShowClearModal(false); loadAll(); }} />
+          onCleared={() => {
+            setShowClearModal(false);
+            setMemberships([]);
+            setRentals([]);
+            loadAll();
+          }} />
       )}
 
       {removeUser && (
