@@ -40,11 +40,13 @@ export default function Profile() {
 
   // --- FETCH DATA FROM BACKEND ---
   const fetchData = async () => {
-    // ✅ CRITICAL FIX: Do not fire API calls if the token is missing
-    if (!token) return;
-
     setLoading(true);
     try {
+      if (!token) {
+        console.warn("No token available. Skipping API calls.");
+        return; // The finally block below will stop the loading spinner
+      }
+
       // 1. Fetch profile info
       const profileRes = await fetch(`${API_URL}/users/${user.id}`, {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -61,8 +63,6 @@ export default function Profile() {
         if (setUser && data.full_name) {
           setUser(prev => ({ ...prev, full_name: data.full_name }));
         }
-      } else if (profileRes.status === 401) {
-        console.warn("Session expired. Please log in again.");
       }
 
       // 2. Fetch transactions and total spent
@@ -75,15 +75,15 @@ export default function Profile() {
         const paymentData = await paymentRes.json();
         setTransactions(paymentData.transactions || []);
         setTotalSpent(paymentData.totalSpent || 0);
-      } else if (paymentRes.status === 401) {
-        console.warn("Session expired. Please log in again.");
       } else {
         console.error("Failed to fetch payments. Status:", paymentRes.status);
       }
     } catch (error) {
       console.error("Error fetching profile data:", error);
+    } finally {
+      // ✅ FIXED: Always stop the loading spinner, no matter what happens
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -92,10 +92,8 @@ export default function Profile() {
       return;
     }
     
-    // ✅ CRITICAL FIX: Only run fetchData when the token exists
-    if (token) {
-      fetchData();
-    }
+    // Fetch data (this will gracefully handle if the token is missing)
+    fetchData();
   }, [user, navigate, token]);
 
   // --- SAVE PROFILE CHANGES ---
@@ -131,8 +129,8 @@ export default function Profile() {
     }
   };
 
-  // Show a loading state if the user is logged in but the token is still loading
-  if (loading || (user && !token)) {
+  // ✅ FIXED: Removed the (user && !token) check which was causing the infinite loop
+  if (loading) {
     return <div className="p-8 text-center text-gray-400">Loading profile data...</div>;
   }
   
