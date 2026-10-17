@@ -20,7 +20,6 @@ export default function Profile() {
   const [isEditing, setIsEditing] = useState(false);
   const [saveLoading, setSaveLoading] = useState(false);
   
-  // ✅ NEW: State for transactions
   const [transactions, setTransactions] = useState([]);
   const [totalSpent, setTotalSpent] = useState(0);
 
@@ -40,58 +39,53 @@ export default function Profile() {
   };
 
   // --- FETCH DATA FROM BACKEND ---
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch profile info (cache: 'no-store' prevents stale data)
+      const profileRes = await fetch(`${API_URL}/users/${user.id}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store' 
+      });
+      
+      if (profileRes.ok) {
+        const data = await profileRes.json();
+        setCoachDetails({
+          experience_years: data.experience_years || 0,
+          expertise: data.expertise || '',
+          created_at: data.created_at || data.createdAt || null
+        });
+        if (setUser && data.full_name) {
+          setUser(prev => ({ ...prev, full_name: data.full_name }));
+        }
+      }
+
+      // 2. Fetch transactions and total spent (cache: 'no-store')
+      const paymentRes = await fetch(`${API_URL}/payments/me`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        cache: 'no-store'
+      });
+      
+      if (paymentRes.ok) {
+        const paymentData = await paymentRes.json();
+        setTransactions(paymentData.transactions || []);
+        setTotalSpent(paymentData.totalSpent || 0);
+      } else {
+        console.error("Failed to fetch payments. Status:", paymentRes.status);
+      }
+    } catch (error) {
+      console.error("Error fetching profile data:", error);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
     if (!user) {
       navigate('/login');
       return;
     }
-
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // 1. Fetch profile info
-        const profileRes = await fetch(`${API_URL}/users/${user.id}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (profileRes.ok) {
-          const data = await profileRes.json();
-          console.log("Backend Data Received:", data); 
-          
-          setCoachDetails({
-            experience_years: data.experience_years || 0,
-            expertise: data.expertise || '',
-            created_at: data.created_at || data.createdAt || null
-          });
-
-          if (setUser && data.full_name) {
-            setUser(prev => ({ ...prev, full_name: data.full_name }));
-          }
-        } else {
-          console.error("Failed to fetch profile. Status:", profileRes.status);
-        }
-
-        // 2. Fetch transactions and total spent
-        const paymentRes = await fetch(`${API_URL}/payments/me`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        
-        if (paymentRes.ok) {
-          const paymentData = await paymentRes.json();
-          setTransactions(paymentData.transactions || []);
-          setTotalSpent(paymentData.totalSpent || 0);
-        } else {
-          console.error("Failed to fetch payments. Status:", paymentRes.status);
-        }
-
-      } catch (error) {
-        console.error("Error fetching profile data:", error);
-      }
-      setLoading(false);
-    };
-
     fetchData();
-  }, [user, navigate, token, setUser]);
+  }, [user, navigate, token]);
 
   // --- SAVE PROFILE CHANGES ---
   const handleSaveProfile = async () => {
@@ -133,7 +127,7 @@ export default function Profile() {
   return (
     <div className="container mx-auto p-4 md:p-8 max-w-5xl text-gray-200">
       
-      {/* --- HEADER SECTION --- */}
+      {/* HEADER SECTION */}
       <div className="flex items-center gap-4 mb-8">
         <div className="w-16 h-16 rounded-full bg-gray-700 flex items-center justify-center text-2xl font-bold text-white">
           {user.full_name?.charAt(0).toUpperCase() || 'U'}
@@ -149,7 +143,7 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* --- SUMMARY CARDS --- */}
+      {/* SUMMARY CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {isCoach ? (
           <>
@@ -174,12 +168,10 @@ export default function Profile() {
           <>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Total Spent</p>
-              {/* ✅ FIXED: Dynamic total spent */}
               <p className="text-green-400 font-bold text-2xl">₱{totalSpent.toFixed(2)}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
               <p className="text-gray-500 text-xs uppercase tracking-wider mb-1">Transactions</p>
-              {/* ✅ FIXED: Dynamic transaction count */}
               <p className="text-blue-400 font-bold text-2xl">{transactions.length}</p>
             </div>
             <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-5">
@@ -194,7 +186,7 @@ export default function Profile() {
         )}
       </div>
 
-      {/* --- TABS NAVIGATION --- */}
+      {/* TABS NAVIGATION */}
       <div className="flex space-x-6 border-b border-gray-800 mb-6">
         {tabs.map((t) => (
           <button
@@ -211,7 +203,7 @@ export default function Profile() {
         ))}
       </div>
 
-      {/* --- TAB CONTENT --- */}
+      {/* TAB CONTENT */}
       {activeTab === 'overview' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
@@ -340,9 +332,17 @@ export default function Profile() {
         </div>
       )}
 
-      {/* ✅ NEW: Transactions Tab */}
+      {/* TRANSACTIONS TAB */}
       {activeTab === 'transactions' && !isCoach && (
         <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-6">
+          
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-lg font-semibold text-white">Transaction History</h3>
+            <button onClick={fetchData} disabled={loading} className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1 disabled:opacity-50">
+              <span className={loading ? 'animate-spin' : ''}>🔄</span> Refresh
+            </button>
+          </div>
+
           {transactions.length === 0 ? (
             <p className="text-center text-gray-500 py-4">No transactions found.</p>
           ) : (
