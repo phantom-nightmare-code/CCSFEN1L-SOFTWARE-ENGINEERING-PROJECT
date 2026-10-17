@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db/mysql');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logActivity } = require('../services/activityLogger');
+const { isPaymentMethod } = require('../services/paymentPolicy');
 
 const router = express.Router();
 
@@ -24,35 +25,43 @@ router.post('/', authenticate, async (req, res, next) => {
     const { item_id, quantity = 1, start_time, end_time, paymentMethod } = req.body;
     if (!item_id || !start_time || !end_time)
       throw Object.assign(new Error('item_id, start_time, end_time required'), { status: 400 });
-
-    const needsVerification = ['gcash', 'maya', 'bank'].includes(paymentMethod);
+    if (!Number.isSafeInteger(Number(item_id)) || Number(item_id) < 1)
+      throw Object.assign(new Error('Invalid item_id'), { status: 400 });
+    if (!Number.isSafeInteger(Number(quantity)) || Number(quantity) < 1)
+      throw Object.assign(new Error('Quantity must be a positive integer'), { status: 400 });
+    if (!isPaymentMethod(paymentMethod))
+      throw Object.assign(new Error('Invalid payment method'), { status: 400 });
 
     const [[item]] = await conn.query(
       'SELECT * FROM rental_items WHERE id=? FOR UPDATE', [item_id]
     );
     if (!item) throw Object.assign(new Error('Item not found'), { status: 404 });
-    if (item.stock < quantity)
+    if (!Number.isFinite(Number(item.hourly_rate)) || Number(item.hourly_rate) <= 0)
+      throw Object.assign(new Error('Item has an invalid rental rate'), { status: 400 });
+    if (item.stock < Number(quantity))
       throw Object.assign(new Error('Insufficient stock'), { status: 400 });
 
     const start = new Date(start_time);
     const end   = new Date(end_time);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start)
+      throw Object.assign(new Error('A valid end time after the start time is required'), { status: 400 });
     const hours = Math.max(1, Math.ceil((end - start) / 3_600_000));
-    const total = Number(item.hourly_rate) * hours * quantity;
+    const safeQuantity = Number(quantity);
+    const total = Math.round(Number(item.hourly_rate) * hours * safeQuantity * 100) / 100;
 
-    // 'reserved' = pending verification, 'active' = paid and confirmed
-    const initialStatus = needsVerification ? 'reserved' : 'active';
+    const initialStatus = 'reserved';
 
     const [r] = await conn.query(
       `INSERT INTO rentals
         (user_id, item_id, quantity, start_time, end_time, status, total_cost)
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, item_id, quantity, start, end, initialStatus, total]
+      [req.user.id, item_id, safeQuantity, start, end, initialStatus, total]
     );
 
     // Reserve stock in both cases
     await conn.query(
       'UPDATE rental_items SET stock = stock - ? WHERE id = ?',
-      [quantity, item_id]
+      [safeQuantity, item_id]
     );
 
     await conn.commit();

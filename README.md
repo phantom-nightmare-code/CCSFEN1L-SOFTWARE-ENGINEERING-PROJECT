@@ -91,8 +91,8 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 
 ### 💸 Payment Processing
 - Five methods: **Cash, GCash, Maya, Bank Transfer, Card**
-- Instant activation for Cash and Card
-- **QR verification flow** for GCash / Maya / Bank:
+- Purchases remain pending until an admin verifies that payment was received; the app does not currently process card payments automatically
+- **QR verification flow** for all payment methods:
   - Payment created with `pending` status
   - QR code encodes a verification URL
   - Email sent with the QR code
@@ -109,7 +109,7 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 - 8 seeded rental items with hourly pricing
 - Live stock tracking — decremented on reserve, restored on return
 - Status flow: **Reserved → Confirmed → Hold → Active → Returned**
-- Rentals stay `reserved` until payment verified for digital methods
+- Rentals stay `reserved` until payment is verified
 - Admin CRUD for inventory with safety rules
 - Automatic receipts
 
@@ -288,7 +288,7 @@ FitForge/
 
 ### Prerequisites
 
-- **Node.js 18+** and npm
+- **Node.js 18.11+** and npm
 - **XAMPP** (MySQL + phpMyAdmin)
 - **MongoDB Atlas** account (free tier)
 - **Gmail account** with 2-Step Verification enabled (for SMTP App Password)
@@ -348,11 +348,13 @@ RECAPTCHA_SECRET_KEY=<server-side-secret-key>
 
 # Client URL
 CLIENT_URL=http://localhost:5173
+CORS_ORIGINS=http://localhost:5173
 
 # In client/.env
 VITE_RECAPTCHA_SITE_KEY=<public-site-key>
 
 Create a reCAPTCHA v2 Checkbox site in the Google reCAPTCHA Admin Console and add `localhost` to its allowed domains for local development. Keep the secret key in the server `.env`; never expose it in a `VITE_` variable or client code. Copy the client variable into `client/.env`. Restart both servers after changing environment variables.
+For production, set `CLIENT_URL` to your deployed frontend origin and set `CORS_ORIGINS` to the comma-separated list of frontend origins that should be allowed to call the API.
 
 ### 4. Set Up the Database
 1. Start MySQL in XAMPP Control Panel
@@ -372,8 +374,5 @@ cd client
 npm run dev
 
 Open http://localhost:5173 in your browser.
-
-
-
 
 

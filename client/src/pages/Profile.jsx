@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext'; 
 
-const API_URL = import.meta.env.VITE_API_URL || 'https://fitforge-backend-wey2.onrender.com'; 
+const API_URL = import.meta.env.VITE_API_URL || '/api';
 
 export default function Profile() {
   const { user, setUser, isAdmin, token } = useAuth(); 

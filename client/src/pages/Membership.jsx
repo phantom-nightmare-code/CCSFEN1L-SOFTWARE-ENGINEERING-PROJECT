@@ -41,30 +41,13 @@ export default function Membership() {
         paymentMethod: method,
       });
 
-      const methodDetails =
-        method === 'gcash' ? { mobile: '0917XXXXXXX' }
-        : method === 'maya' ? { mobile: '0917XXXXXXX' }
-        : method === 'bank' ? { bank: 'BDO', account: '****1234' }
-        : method === 'cash' ? { cashier: 'front-desk' }
-        : method === 'card' ? { last4: '4242' }
-        : {};
-
       const startDate = m.start_date?.slice(0, 10);
       const endDate   = m.end_date?.slice(0, 10);
 
       const { data: payment } = await api.post('/payments', {
-        amount: plan.price,
         method,
         purpose: 'membership',
         referenceId: m.id,
-        details: {
-          items: [
-            { label: 'Plan',     value: plan.label },
-            { label: 'Duration', value: `${startDate} → ${endDate}` },
-            { label: 'Payment',  value: METHOD_LABEL(method) },
-          ],
-          ...methodDetails,
-        },
       });
 
       if (payment.status === 'pending') {
@@ -125,6 +108,9 @@ export default function Membership() {
           {METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </div>
+      <p className="text-xs text-gray-500">
+        All payment methods stay pending until an admin verifies receipt. Card payments are not processed automatically.
+      </p>
 
       <section>
         <h2 className="text-xl font-semibold mb-3">My memberships</h2>

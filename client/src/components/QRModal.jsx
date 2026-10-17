@@ -60,7 +60,7 @@ export default function QRModal({ payment, onClose, onConfirmed }) {
       >
         <h2 className="text-xl font-bold text-center mb-1">Payment Pending</h2>
         <p className="text-xs text-gray-500 text-center mb-4">
-          Scan this QR with your phone to see the payment details on that device.
+          Scan this QR to view the payment details and confirm payment. An admin must verify receipt before your purchase is activated.
           We've also emailed you a copy.
         </p>
 

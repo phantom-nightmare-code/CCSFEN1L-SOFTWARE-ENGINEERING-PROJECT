@@ -808,27 +808,58 @@ router.delete('/payments/clear-all', async (req, res, next) => {
 });
 
 router.patch('/payments/:id/verify', async (req, res, next) => {
+  const conn = await pool.getConnection();
+  let transactionStarted = false;
   try {
     const payment = await PaymentLog.findById(req.params.id);
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
+    if (payment.status !== 'pending')
+      return res.status(400).json({ error: 'Only pending payments can be verified' });
+
+    await conn.beginTransaction();
+    transactionStarted = true;
+
+    if (payment.purpose === 'membership' && payment.referenceId) {
+      const [[membership]] = await conn.query(
+        `SELECT id, user_id FROM memberships
+         WHERE id = ? AND user_id = ? AND status = 'pending'
+         FOR UPDATE`,
+        [payment.referenceId, payment.userId]
+      );
+      if (!membership)
+        throw Object.assign(new Error('Pending membership not found'), { status: 409 });
+
+      await conn.query(
+        `UPDATE memberships SET status = 'cancelled'
+         WHERE user_id = ? AND status = 'active'`,
+        [payment.userId]
+      );
+      await conn.query(
+        `UPDATE memberships SET status = 'active' WHERE id = ?`,
+        [membership.id]
+      );
+    } else if (payment.purpose === 'rental' && payment.referenceId) {
+      const [[rental]] = await conn.query(
+        `SELECT id FROM rentals
+         WHERE id = ? AND user_id = ? AND status = 'reserved'
+         FOR UPDATE`,
+        [payment.referenceId, payment.userId]
+      );
+      if (!rental)
+        throw Object.assign(new Error('Reserved rental not found'), { status: 409 });
+      await conn.query(
+        `UPDATE rentals SET status = 'active' WHERE id = ?`,
+        [rental.id]
+      );
+    } else {
+      throw Object.assign(new Error('Unsupported payment purchase'), { status: 400 });
+    }
 
     payment.status = 'paid';
     payment.verifiedAt = new Date();
     await payment.save();
-
-    if (payment.purpose === 'membership' && payment.referenceId) {
-      await pool.query(
-        `UPDATE memberships SET status='active' WHERE id=?`,
-        [payment.referenceId]
-      );
-    }
-
-    if (payment.purpose === 'rental' && payment.referenceId) {
-      await pool.query(
-        `UPDATE rentals SET status='active' WHERE id=?`,
-        [payment.referenceId]
-      );
-    }
+    await conn.commit();
+    transactionStarted = false;
 
     // ✅ NEW: Send the receipt email to the user
     try {
@@ -880,7 +911,11 @@ router.patch('/payments/:id/verify', async (req, res, next) => {
     });
 
     res.json({ ok: true });
-  } catch (err) { next(err); }
+  } catch (err) {
+    if (transactionStarted) await conn.rollback();
+    next(err);
+  }
+  finally { conn.release(); }
 });
 
 router.patch('/payments/:id/reject', async (req, res, next) => {

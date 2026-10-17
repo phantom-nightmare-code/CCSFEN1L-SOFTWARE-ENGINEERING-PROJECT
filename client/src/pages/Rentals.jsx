@@ -40,29 +40,10 @@ export default function Rentals() {
         paymentMethod: method,
       });
 
-      const methodDetails =
-        method === 'gcash' ? { mobile: '0917XXXXXXX' }
-        : method === 'maya' ? { mobile: '0917XXXXXXX' }
-        : method === 'bank' ? { bank: 'BDO', account: '****1234' }
-        : method === 'cash' ? { cashier: 'front-desk' }
-        : method === 'card' ? { last4: '4242' }
-        : {};
-
       const { data: payment } = await api.post('/payments', {
-        amount: rental.total_cost,
         method,
         purpose: 'rental',
         referenceId: rental.id,
-        details: {
-          items: [
-            { label: 'Item',     value: item.name },
-            { label: 'Quantity', value: 1 },
-            { label: 'Duration', value: `${rental.hours} hour${rental.hours > 1 ? 's' : ''}` },
-            { label: 'Rate',     value: `₱${Number(item.hourly_rate).toFixed(2)}/hr` },
-            { label: 'Payment',  value: METHOD_LABEL(method) },
-          ],
-          ...methodDetails,
-        },
       });
 
       if (payment.status === 'pending') {
@@ -117,6 +98,9 @@ export default function Rentals() {
           {METHODS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
         </select>
       </div>
+      <p className="text-xs text-gray-500">
+        All payment methods stay pending until an admin verifies receipt. Card payments are not processed automatically.
+      </p>
 
       <div className="grid md:grid-cols-3 gap-4">
         {items.map(i => (

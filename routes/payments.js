@@ -5,6 +5,7 @@ const pool = require('../db/mysql');
 const PaymentLog = require('../models/mongo/PaymentLog');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logActivity } = require('../services/activityLogger');
+const { isPaymentMethod, MEMBERSHIP_PRICES } = require('../services/paymentPolicy');
 const {
   parseEmails,
   sendPaymentVerificationEmail,
@@ -52,72 +53,93 @@ async function emailVerificationFor(payment, additionalTo = []) {
    ============================================================ */
 router.post('/', authenticate, async (req, res, next) => {
   try {
-    const { amount, method, purpose, referenceId, details, sendTo } = req.body;
-    if (!amount || !method || !purpose)
-      return res.status(400).json({ error: 'amount, method, purpose required' });
+    const { method, purpose, referenceId, sendTo } = req.body;
+    if (!isPaymentMethod(method))
+      return res.status(400).json({ error: 'Invalid payment method' });
+    if (!['membership', 'rental'].includes(purpose))
+      return res.status(400).json({ error: 'Invalid payment purpose' });
 
-    const needsVerification = ['gcash', 'maya', 'bank'].includes(method);
+    const linkedId = Number(referenceId);
+    if (!Number.isSafeInteger(linkedId) || linkedId < 1)
+      return res.status(400).json({ error: 'A valid referenceId is required' });
+
+    let amount;
+    let details;
+    if (purpose === 'membership') {
+      const [[membership]] = await pool.query(
+        `SELECT id, type, start_date, end_date
+         FROM memberships
+         WHERE id = ? AND user_id = ? AND status = 'pending'`,
+        [linkedId, req.user.id]
+      );
+      if (!membership)
+        return res.status(404).json({ error: 'Pending membership not found' });
+
+      amount = MEMBERSHIP_PRICES[membership.type];
+      if (amount == null)
+        return res.status(400).json({ error: 'Unsupported membership type' });
+      details = {
+        items: [
+          { label: 'Plan', value: membership.type },
+          { label: 'Duration', value: `${membership.start_date} → ${membership.end_date}` },
+        ],
+      };
+    } else {
+      const [[rental]] = await pool.query(
+        `SELECT r.id, r.quantity, r.start_time, r.end_time, r.total_cost,
+                i.name AS item_name, i.hourly_rate
+         FROM rentals r
+         JOIN rental_items i ON i.id = r.item_id
+         WHERE r.id = ? AND r.user_id = ? AND r.status = 'reserved'`,
+        [linkedId, req.user.id]
+      );
+      if (!rental)
+        return res.status(404).json({ error: 'Reserved rental not found' });
+
+      amount = Number(rental.total_cost);
+      if (!Number.isFinite(amount) || amount <= 0)
+        return res.status(400).json({ error: 'Rental has an invalid total' });
+      const hours = Math.max(
+        1,
+        Math.ceil((new Date(rental.end_time) - new Date(rental.start_time)) / 3_600_000)
+      );
+      details = {
+        items: [
+          { label: 'Item', value: rental.item_name },
+          { label: 'Quantity', value: rental.quantity },
+          { label: 'Duration', value: `${hours} hour${hours === 1 ? '' : 's'}` },
+          { label: 'Rate', value: `PHP ${Number(rental.hourly_rate).toFixed(2)}/hr` },
+        ],
+      };
+    }
+
+    const existingPayment = await PaymentLog.findOne({
+      userId: req.user.id,
+      purpose,
+      referenceId: linkedId,
+      status: { $in: ['pending', 'paid'] },
+    }).lean();
+    if (existingPayment)
+      return res.status(409).json({ error: 'A payment already exists for this purchase' });
 
     const reference = `PAY-${Date.now().toString(36).toUpperCase()}${crypto
-      .randomBytes(2)
+      .randomBytes(16)
       .toString('hex')
       .toUpperCase()}`;
-    const verificationToken = needsVerification
-      ? crypto.randomBytes(16).toString('hex')
-      : null;
-
     const payment = await PaymentLog.create({
       userId: req.user.id,
       amount,
       method,
       purpose,
-      referenceId,
+      referenceId: linkedId,
       reference,
-      details: details || {},
-      status: needsVerification ? 'pending' : 'paid',
-      verificationToken,
+      details,
+      status: 'pending',
     });
 
-    // Instant activation for cash/card
-    if (!needsVerification && purpose === 'membership' && referenceId) {
-      await pool.query(
-        `UPDATE memberships SET status='active' WHERE id=? AND user_id=?`,
-        [referenceId, req.user.id]
-      );
-    }
-
-    // ✅ Send receipt immediately if payment is instantly paid (cash/card)
-    if (!needsVerification) {
-      try {
-        const { sendPaymentReceiptEmail } = require('../services/mailer');
-        const [rows] = await pool.query(
-          'SELECT email, full_name, username FROM users WHERE id=?', 
-          [req.user.id]
-        );
-        if (rows.length) {
-          const user = rows[0];
-          sendPaymentReceiptEmail({
-            to: user.email,
-            userName: user.full_name || user.username,
-            reference: payment.reference,
-            amount: payment.amount,
-            method: payment.method,
-            purpose: payment.purpose,
-            date: new Date(),
-            itemName: payment.details?.items?.find(i => i.label === 'Item')?.value,
-          }).catch(err => console.error('Receipt email failed:', err.message));
-        }
-      } catch (e) {
-        console.error('Receipt email failed:', e.message);
-      }
-    }
-
-    // Email for methods needing verification — fire-and-forget
-    if (needsVerification) {
-      emailVerificationFor(payment, parseEmails(sendTo))
-        .then(() => console.log(`[mailer] ✅ QR emailed for ${payment.reference}`))
-        .catch(err => console.error(`[mailer] ❌ Email failed for ${payment.reference}:`, err.message));
-    }
+    emailVerificationFor(payment, parseEmails(sendTo))
+      .then(() => console.log(`[mailer] ✅ QR emailed for ${payment.reference}`))
+      .catch(err => console.error(`[mailer] ❌ Email failed for ${payment.reference}:`, err.message));
 
     await logActivity({
       userId: req.user.id,
@@ -135,19 +157,12 @@ router.post('/', authenticate, async (req, res, next) => {
    ============================================================ */
 router.get('/verify/:reference', async (req, res, next) => {
   try {
-    const payment = await PaymentLog.findOne({ reference: req.params.reference }).lean();
+    const payment = await PaymentLog.findOne({ reference: req.params.reference })
+      .select('_id amount method purpose reference status details createdAt')
+      .lean();
     if (!payment) return res.status(404).json({ error: 'Payment not found' });
 
-    const [userRows] = await pool.query(
-      'SELECT email, full_name FROM users WHERE id = ?',
-      [payment.userId]
-    );
-
-    res.json({
-      payment,
-      user: userRows[0] || { email: '—', full_name: '—' },
-      reference: req.params.reference,
-    });
+    res.json({ payment });
   } catch (err) { next(err); }
 });
 

@@ -5,6 +5,7 @@ const pool = require('../db/mysql');
 const { authenticate, requireCoach } = require('../middleware/auth');
 const { logActivity } = require('../services/activityLogger');
 const { sendCoachPaymentEmail } = require('../services/mailer');
+const { isPaymentMethod } = require('../services/paymentPolicy');
 
 const router = express.Router();
 router.use(authenticate);
@@ -121,8 +122,12 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'coachId and hours required' });
 
     const hoursNum = Number(hours);
-    if (!hoursNum || hoursNum <= 0)
+    if (!Number.isFinite(hoursNum) || hoursNum <= 0 || hoursNum > 24)
       return res.status(400).json({ error: 'Invalid hours' });
+    if (!isPaymentMethod(method || 'cash'))
+      return res.status(400).json({ error: 'Invalid payment method' });
+    if (!Number.isSafeInteger(Number(coachId)) || Number(coachId) === req.user.id)
+      return res.status(400).json({ error: 'Invalid coach' });
 
     const [[coach]] = await pool.query(
       `SELECT id, full_name, username, email, coach_hourly_rate
@@ -136,69 +141,60 @@ router.post('/', async (req, res, next) => {
     const rate = Number(coach.coach_hourly_rate);
     const amount = rate * hoursNum;
     const method_ = method || 'cash';
-    const needsVerification = ['gcash', 'maya', 'bank'].includes(method_);
 
     const reference = `COACH-${Date.now().toString(36).toUpperCase()}${crypto.randomBytes(2).toString('hex').toUpperCase()}`;
-    const verificationToken = needsVerification ? crypto.randomBytes(16).toString('hex') : null;
+    const verificationToken = crypto.randomBytes(32).toString('hex');
 
     const [result] = await pool.query(
       `INSERT INTO coach_payments
         (member_id, coach_id, hours, rate, amount, method, status, session_date, notes, reference, verification_token)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.user.id, coachId, hoursNum, rate, amount, method_,
-       needsVerification ? 'pending' : 'paid',
+       'pending',
        session_date || null, notes || null, reference, verificationToken]
     );
 
-    // QR + email for e-credit methods
-    let qrDataUrl = null;
-    if (needsVerification) {
-      try {
-        const receiptText = [
-          'FitForge Coach Payment',
-          `Reference: ${reference}`,
-          `Coach: ${coach.full_name || coach.username}`,
-          `Amount: PHP ${amount.toFixed(2)}`,
-          `Method: ${method_.toUpperCase()}`,
-          `Hours: ${hoursNum} × PHP ${rate.toFixed(2)}/hr`,
-          session_date ? `Session: ${session_date}` : '',
-        ].filter(Boolean).join('\n');
+    const receiptText = [
+      'FitForge Coach Payment',
+      `Reference: ${reference}`,
+      `Coach: ${coach.full_name || coach.username}`,
+      `Amount: PHP ${amount.toFixed(2)}`,
+      `Method: ${method_.toUpperCase()}`,
+      `Hours: ${hoursNum} × PHP ${rate.toFixed(2)}/hr`,
+      session_date ? `Session: ${session_date}` : '',
+    ].filter(Boolean).join('\n');
 
-        qrDataUrl = await QRCode.toDataURL(receiptText, {
-          width: 300, margin: 2,
-          color: { dark: '#000000', light: '#ffffff' },
-        });
+    const qrDataUrl = await QRCode.toDataURL(receiptText, {
+      width: 300, margin: 2,
+      color: { dark: '#000000', light: '#ffffff' },
+    });
 
-        const [memberRows] = await pool.query(
-          'SELECT email, full_name FROM users WHERE id = ?', [req.user.id]
-        );
-        if (memberRows.length) {
-          sendCoachPaymentEmail({
-            to: memberRows[0].email,
-            memberName: memberRows[0].full_name,
-            coachName: coach.full_name || coach.username,
-            reference, amount, rate, hours: hoursNum,
-            method: method_,
-            sessionDate: session_date || null,
-            notes: notes || null,
-            qrDataUrl,
-          }).catch(err => console.error('[coach-pay] Email failed:', err.message));
-        }
-      } catch (mailErr) {
-        console.error('Coach payment email failed:', mailErr.message);
-      }
+    const [memberRows] = await pool.query(
+      'SELECT email, full_name FROM users WHERE id = ?', [req.user.id]
+    );
+    if (memberRows.length) {
+      sendCoachPaymentEmail({
+        to: memberRows[0].email,
+        memberName: memberRows[0].full_name,
+        coachName: coach.full_name || coach.username,
+        reference, amount, rate, hours: hoursNum,
+        method: method_,
+        sessionDate: session_date || null,
+        notes: notes || null,
+        qrDataUrl,
+      }).catch(err => console.error('[coach-pay] Email failed:', err.message));
     }
 
     await logActivity({
       userId: req.user.id, action: 'coach_payment_made', req,
-      metadata: { coachId, hours: hoursNum, amount, method: method_, status: needsVerification ? 'pending' : 'paid' },
+      metadata: { coachId, hours: hoursNum, amount, method: method_, status: 'pending' },
     });
 
     res.status(201).json({
       id: result.insertId,
       reference, amount, rate,
       hours: hoursNum,
-      status: needsVerification ? 'pending' : 'paid',
+      status: 'pending',
       qrDataUrl,
       coach: { id: coach.id, name: coach.full_name || coach.username },
     });

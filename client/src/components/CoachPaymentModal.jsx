@@ -20,6 +20,7 @@ export default function CoachPaymentModal({ coach, onClose, onPaid }) {
   const [busy, setBusy] = useState(false);
   const [receipt, setReceipt] = useState(null);
   const [qrPayment, setQrPayment] = useState(null);
+  const [confirmationSent, setConfirmationSent] = useState(false);
 
   const rate = coach?.hourly_rate || 0;
   const hoursNum = Number(hours) || 0;
@@ -74,19 +75,7 @@ export default function CoachPaymentModal({ coach, onClose, onPaid }) {
     try {
       await api.patch(`/coach-payments/${qrPayment.id}/confirm`);
       showToast('Confirmation sent — coach will verify shortly');
-      setReceipt({
-        reference: qrPayment.reference,
-        amount: qrPayment.amount,
-        rate: qrPayment.rate,
-        hours: qrPayment.hours,
-        method: qrPayment.method,
-        coachName: qrPayment.coachName,
-        memberName: 'You',
-        sessionDate: qrPayment.sessionDate,
-        notes: '',
-        date: new Date(),
-      });
-      setQrPayment(null);
+      setConfirmationSent(true);
       onPaid?.();
     } catch (e) {
       showToast(e.response?.data?.error || 'Confirm failed', 'error');
@@ -112,9 +101,15 @@ export default function CoachPaymentModal({ coach, onClose, onPaid }) {
             <Row label="Amount" value={`₱${Number(qrPayment.amount).toFixed(2)}`} />
             <Row label="Method" value={String(qrPayment.method).toUpperCase()} />
           </div>
-          <button onClick={confirmQr} className="w-full mt-5 bg-brand-600 text-white py-2.5 rounded-lg hover:bg-brand-700">
-            I've sent the payment
-          </button>
+          {confirmationSent ? (
+            <p className="mt-5 text-center text-sm text-blue-600">
+              Confirmation sent. Your coach must verify the payment before it is marked paid.
+            </p>
+          ) : (
+            <button onClick={confirmQr} className="w-full mt-5 bg-brand-600 text-white py-2.5 rounded-lg hover:bg-brand-700">
+              I've sent the payment
+            </button>
+          )}
           <button onClick={() => { setQrPayment(null); onClose(); }} className="w-full mt-2 text-xs text-gray-500 hover:underline">
             Close
           </button>

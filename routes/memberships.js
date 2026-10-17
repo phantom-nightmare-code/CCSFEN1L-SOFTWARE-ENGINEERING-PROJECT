@@ -2,6 +2,7 @@ const express = require('express');
 const pool = require('../db/mysql');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logActivity } = require('../services/activityLogger');
+const { isPaymentMethod, MEMBERSHIP_PRICES } = require('../services/paymentPolicy');
 
 const router = express.Router();
 
@@ -11,27 +12,17 @@ router.post('/', authenticate, async (req, res, next) => {
   try {
     await conn.beginTransaction();
 
-    const { type, start_date, paymentMethod } = req.body;
-    if (!['walk-in', 'monthly', 'yearly'].includes(type))
+    const { type, paymentMethod } = req.body;
+    if (!Object.hasOwn(MEMBERSHIP_PRICES, type))
       throw Object.assign(new Error('Invalid membership type'), { status: 400 });
+    if (!isPaymentMethod(paymentMethod))
+      throw Object.assign(new Error('Invalid payment method'), { status: 400 });
 
-    const needsVerification = ['gcash', 'maya', 'bank'].includes(paymentMethod);
-
-    const start = new Date(start_date || Date.now());
+    const start = new Date();
     const end = new Date(start);
     if (type === 'walk-in') end.setDate(end.getDate() + 1);
     if (type === 'monthly') end.setMonth(end.getMonth() + 1);
     if (type === 'yearly')  end.setFullYear(end.getFullYear() + 1);
-
-    // Cancel any existing active membership
-    await conn.query(
-      `UPDATE memberships SET status='cancelled'
-       WHERE user_id=? AND status='active'`,
-      [req.user.id]
-    );
-
-    // Pending until payment verified for digital methods
-    const initialStatus = needsVerification ? 'pending' : 'active';
 
     const [r] = await conn.query(
       `INSERT INTO memberships (user_id, type, start_date, end_date, status)
@@ -39,7 +30,7 @@ router.post('/', authenticate, async (req, res, next) => {
       [req.user.id, type,
        start.toISOString().slice(0, 10),
        end.toISOString().slice(0, 10),
-       initialStatus]
+       'pending']
     );
 
     await conn.commit();
@@ -48,13 +39,13 @@ router.post('/', authenticate, async (req, res, next) => {
       userId: req.user.id,
       action: 'membership_created',
       req,
-      metadata: { type, status: initialStatus, paymentMethod },
+      metadata: { type, status: 'pending', paymentMethod },
     });
 
     res.status(201).json({
       id: r.insertId,
       type,
-      status: initialStatus,
+      status: 'pending',
       start_date: start.toISOString().slice(0, 10),
       end_date:   end.toISOString().slice(0, 10),
     });

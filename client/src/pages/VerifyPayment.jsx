@@ -46,7 +46,7 @@ export default function VerifyPayment() {
 
   if (!data) return <div className="p-8 text-center text-gray-500">Loading…</div>;
 
-  const { payment, user: payer } = data;
+  const { payment } = data;
   const alreadyConfirmed = payment.details?.userConfirmedAt;
   const isVerified = payment.status === 'paid';
   const isRejected = payment.status === 'failed';
@@ -58,7 +58,6 @@ export default function VerifyPayment() {
         <p className="text-xs text-gray-500 text-center mb-6 font-mono">{reference}</p>
 
         <div className="space-y-3 text-sm">
-          <Row label="Account" value={payer.email} />
           <Row label="Amount"  value={`₱${Number(payment.amount).toFixed(2)}`} />
           <Row label="Method"  value={String(payment.method).toUpperCase()} />
           <Row label="Purpose" value={payment.purpose} />
