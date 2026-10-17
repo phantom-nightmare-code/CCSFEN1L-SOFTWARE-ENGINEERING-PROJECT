@@ -41,15 +41,19 @@ export default function Profile() {
   // --- FETCH DATA FROM BACKEND ---
   const fetchData = async () => {
     setLoading(true);
+    
+    // ✅ FALLBACK: Use the token from context, or grab it directly from localStorage
+    const authToken = token || localStorage.getItem('token');
+
     try {
-      if (!token) {
+      if (!authToken) {
         console.warn("No token available. Skipping API calls.");
-        return; // The finally block below will stop the loading spinner
+        return; 
       }
 
       // 1. Fetch profile info
       const profileRes = await fetch(`${API_URL}/users/${user.id}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
         cache: 'no-store' 
       });
       
@@ -67,7 +71,7 @@ export default function Profile() {
 
       // 2. Fetch transactions and total spent
       const paymentRes = await fetch(`${API_URL}/payments/me`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
         cache: 'no-store'
       });
       
@@ -81,7 +85,6 @@ export default function Profile() {
     } catch (error) {
       console.error("Error fetching profile data:", error);
     } finally {
-      // ✅ FIXED: Always stop the loading spinner, no matter what happens
       setLoading(false);
     }
   };
@@ -91,21 +94,21 @@ export default function Profile() {
       navigate('/login');
       return;
     }
-    
-    // Fetch data (this will gracefully handle if the token is missing)
     fetchData();
   }, [user, navigate, token]);
 
   // --- SAVE PROFILE CHANGES ---
   const handleSaveProfile = async () => {
-    if (!token) return;
+    const authToken = token || localStorage.getItem('token');
+    if (!authToken) return;
+    
     setSaveLoading(true);
     try {
       const response = await fetch(`${API_URL}/users/${user.id}/coach-details`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${authToken}`
         },
         body: JSON.stringify({
           full_name: user.full_name,
@@ -129,7 +132,6 @@ export default function Profile() {
     }
   };
 
-  // ✅ FIXED: Removed the (user && !token) check which was causing the infinite loop
   if (loading) {
     return <div className="p-8 text-center text-gray-400">Loading profile data...</div>;
   }
