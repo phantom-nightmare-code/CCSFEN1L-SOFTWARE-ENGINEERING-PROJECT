@@ -7,6 +7,10 @@ const PaymentLog = require('../models/mongo/PaymentLog');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logAdminAction } = require('../services/auditLogger');
 const { buildClientUrl } = require('../services/clientUrl');
+const {
+  inactivityDaysSince,
+  canScheduleInactiveAccountDeletion,
+} = require('../services/accountActivity');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
@@ -77,6 +81,44 @@ router.get('/users', async (_req, res, next) => {
        FROM users ORDER BY id DESC`
     );
     res.json(rows);
+  } catch (err) { next(err); }
+});
+
+router.get('/users/activity-status', async (req, res, next) => {
+  try {
+    const [users] = await pool.query(
+      `SELECT id, email, username, full_name, role, created_at, pending_deletion_at
+       FROM users
+       ORDER BY id DESC`
+    );
+    const loginDates = await ActivityLog.aggregate([
+      { $match: { action: 'login', userId: { $ne: null } } },
+      { $group: { _id: '$userId', lastLoginAt: { $max: '$createdAt' } } },
+    ]);
+    const loginDateByUser = new Map(
+      loginDates.map(row => [Number(row._id), row.lastLoginAt])
+    );
+    const now = new Date();
+
+    res.json(users.map(user => {
+      const lastLoginAt = loginDateByUser.get(Number(user.id)) || null;
+      const inactivityDays = inactivityDaysSince(lastLoginAt, user.created_at, now);
+      return {
+        ...user,
+        lastLoginAt,
+        inactivityDays,
+        accountStatus: inactivityDays == null
+          ? 'unknown'
+          : inactivityDays <= 7 ? 'active' : 'inactive',
+        canScheduleDeletion: canScheduleInactiveAccountDeletion({
+          role: user.role,
+          userId: user.id,
+          adminId: req.user.id,
+          pendingDeletionAt: user.pending_deletion_at,
+          inactivityDays,
+        }),
+      };
+    }));
   } catch (err) { next(err); }
 });
 
@@ -156,7 +198,7 @@ router.delete('/users/:id', async (req, res, next) => {
       [deletionDate, token, reason.trim(), userId]
     );
 
-    // Email the user (fire-and-forget)
+    let revocationEmailSent = false;
     try {
       const { sendAccountDeletionNoticeEmail } = require('../services/mailer');
       const revokeUrl = buildClientUrl(`/revoke-deletion/${token}`);
@@ -169,6 +211,7 @@ router.delete('/users/:id', async (req, res, next) => {
         }),
         revokeUrl,
       });
+      revocationEmailSent = true;
     } catch (mailErr) {
       console.error('Deletion notice email failed:', mailErr.message);
     }
@@ -186,7 +229,7 @@ router.delete('/users/:id', async (req, res, next) => {
       req,
     });
 
-    res.json({ ok: true, scheduledFor: deletionDate, revocationEmailSent: true });
+    res.json({ ok: true, scheduledFor: deletionDate, revocationEmailSent });
   } catch (err) { next(err); }
 });
 

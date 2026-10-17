@@ -28,6 +28,7 @@ export default function Admin() {
   const [stats, setStats] = useState(null);
   const [aggregate, setAggregate] = useState(null);
   const [users, setUsers] = useState([]);
+  const [accountActivity, setAccountActivity] = useState([]);
   const [pendingDeletions, setPendingDeletions] = useState([]);
   const [activity, setActivity] = useState([]);
   const [payments, setPayments] = useState([]);
@@ -50,9 +51,10 @@ export default function Admin() {
   const loadAll = async (silent = false) => {
     if (!silent) setRefreshing(true);
     try {
-      const [aggr, usr, act, pay, pend, del, cpay] = await Promise.all([
+      const [aggr, usr, accountStatus, act, pay, pend, del, cpay] = await Promise.all([
         api.get('/admin/stats/aggregate').then(r => r.data),
         api.get('/admin/users').then(r => r.data),
+        api.get('/admin/users/activity-status').then(r => r.data),
         api.get('/admin/activity?limit=100').then(r => r.data),
         api.get('/payments').then(r => r.data),
         api.get('/admin/payments/pending').then(r => r.data),
@@ -61,6 +63,7 @@ export default function Admin() {
       ]);
       setAggregate(aggr);
       setUsers(usr);
+      setAccountActivity(accountStatus);
       setActivity(act);
       setPayments(pay);
       setPendingPayments(pend);
@@ -74,14 +77,16 @@ export default function Admin() {
 
   const loadStatsOnly = async () => {
     try {
-      const [aggr, pay, pend, del, cpay] = await Promise.all([
+      const [aggr, accountStatus, pay, pend, del, cpay] = await Promise.all([
         api.get('/admin/stats/aggregate').then(r => r.data),
+        api.get('/admin/users/activity-status').then(r => r.data),
         api.get('/payments').then(r => r.data),
         api.get('/admin/payments/pending').then(r => r.data),
         api.get('/admin/users/pending-deletions').then(r => r.data).catch(() => []),
         api.get('/admin/coach-payments').then(r => r.data).catch(() => null),
       ]);
       setAggregate(aggr);
+      setAccountActivity(accountStatus);
       setPayments(pay);
       setPendingPayments(pend);
       setPendingDeletions(del);
@@ -94,7 +99,7 @@ export default function Admin() {
   useEffect(() => { loadAll(); }, []);
   useEffect(() => {
     const i = setInterval(() => {
-      if (['profile','payments','pending'].includes(tabRef.current)) loadStatsOnly();
+      if (['profile','payments','pending','accounts'].includes(tabRef.current)) loadStatsOnly();
     }, 30000);
     return () => clearInterval(i);
   }, []);
@@ -107,6 +112,9 @@ export default function Admin() {
   const userMap = useMemo(() => {
     const m = {}; users.forEach(u => { m[u.id] = u; }); return m;
   }, [users]);
+  const accountActivityMap = useMemo(() => {
+    const m = {}; accountActivity.forEach(u => { m[u.id] = u; }); return m;
+  }, [accountActivity]);
 
   const displayName = (u) => u.full_name || u.username || u.email || `User #${u.id}`;
 
@@ -134,6 +142,29 @@ export default function Admin() {
       showToast('User permanently deleted');
       loadAll();
     } catch (e) { showToast(e.response?.data?.error || 'Failed', 'error'); }
+  };
+
+  const scheduleInactiveDeletion = async (account) => {
+    if (!account.canScheduleDeletion || account.inactivityDays == null) return;
+    const lastLogin = account.lastLoginAt
+      ? new Date(account.lastLoginAt).toLocaleString()
+      : 'never logged in';
+    const reason = `Inactive for ${account.inactivityDays} days. Last login: ${lastLogin}.`;
+    if (!confirm(
+      `Schedule account deletion for ${displayName(account)}? ` +
+      'They will be emailed and have 7 days to revoke the request.'
+    )) return;
+
+    try {
+      const { data } = await api.delete(`/admin/users/${account.id}`, { data: { reason } });
+      showToast(data.revocationEmailSent
+        ? 'Deletion request scheduled; the user has 7 days to revoke it.'
+        : 'Deletion scheduled, but the notice email failed to send. Check email configuration.',
+      data.revocationEmailSent ? 'success' : 'error');
+      await loadAll(true);
+    } catch (e) {
+      showToast(e.response?.data?.error || 'Could not schedule deletion', 'error');
+    }
   };
 
   const changeMembershipStatus = async (m, newStatus) => {
@@ -245,6 +276,7 @@ export default function Admin() {
     { id: 'profile',      label: 'PROFILE' },
     { id: 'stats',        label: 'STATS' },
     { id: 'users',        label: 'USERS' },
+    { id: 'accounts',     label: `ACCOUNT ACTIVITY${accountActivity.filter(u => u.canScheduleDeletion).length ? ` (${accountActivity.filter(u => u.canScheduleDeletion).length})` : ''}` },
     { id: 'deletions',    label: `DELETIONS${pendingDeletions.length ? ` (${pendingDeletions.length})` : ''}` },
     { id: 'activity',     label: 'ACTIVITY' },
     { id: 'audit',        label: 'AUDIT LOG' },
@@ -330,7 +362,7 @@ export default function Admin() {
             <h3 className="text-xl font-semibold mb-3">Users who used the website ({users.length})</h3>
             <div className="grid md:grid-cols-2 gap-3">
               {users.map(u => {
-                const lastActivity = activity.find(a => a.userId === u.id);
+                const accountStatus = accountActivityMap[u.id];
                 return (
                   <button key={u.id} onClick={() => setDetailUser(u.id)}
                     className="text-left p-4 bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800 flex items-center gap-4 hover:border-brand-500 transition">
@@ -341,7 +373,9 @@ export default function Admin() {
                       <div className="font-semibold truncate">{displayName(u)}{u.id === me?.id && <span className="text-xs text-brand-600 ml-1">(you)</span>}</div>
                       <div className="text-xs text-gray-500 truncate">{u.email}</div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        {lastActivity ? `Last: ${lastActivity.action} · ${new Date(lastActivity.createdAt).toLocaleDateString()}` : 'No activity yet'}
+                        {accountStatus?.lastLoginAt
+                          ? `Last login: ${new Date(accountStatus.lastLoginAt).toLocaleDateString()} · ${accountStatus.inactivityDays} day(s) ago`
+                          : accountStatus ? 'Never logged in' : 'Activity status unavailable'}
                       </div>
                     </div>
                     <span className={`px-2 py-0.5 rounded text-xs shrink-0 ${
@@ -478,6 +512,80 @@ export default function Admin() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ACCOUNT ACTIVITY */}
+      {tab === 'accounts' && (
+        <div className="space-y-4">
+          <div>
+            <h2 className="text-xl font-semibold">Account Activity</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Activity is based on last login, not live online presence. Accounts inactive for more than 7 days can be scheduled for deletion, with a 7-day email notice and revocation window.
+            </p>
+          </div>
+          <div className="overflow-x-auto bg-white dark:bg-gray-900 rounded-xl shadow border border-gray-100 dark:border-gray-800">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left border-b border-gray-100 dark:border-gray-800">
+                  <th className="p-3">Account</th>
+                  <th>Role</th>
+                  <th>Last login</th>
+                  <th>Inactive for</th>
+                  <th>Status</th>
+                  <th className="pr-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {accountActivity.map(account => (
+                  <tr key={account.id} className="border-b border-gray-100 dark:border-gray-800">
+                    <td className="p-3">
+                      <div className="font-medium">{displayName(account)}</div>
+                      <div className="text-xs text-gray-500">{account.email}</div>
+                    </td>
+                    <td className="capitalize">{account.role}</td>
+                    <td className="text-gray-500">
+                      {account.lastLoginAt
+                        ? new Date(account.lastLoginAt).toLocaleString()
+                        : `Never logged in · registered ${new Date(account.created_at).toLocaleDateString()}`}
+                    </td>
+                    <td>{account.inactivityDays == null ? 'Unknown' : `${account.inactivityDays} day(s)`}</td>
+                    <td>
+                      <span className={`px-2 py-0.5 rounded text-xs ${
+                        account.pending_deletion_at
+                          ? 'bg-yellow-100 text-yellow-800'
+                          : account.accountStatus === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : account.accountStatus === 'inactive'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-gray-100 text-gray-700'
+                      }`}>
+                        {account.pending_deletion_at
+                          ? 'deletion scheduled'
+                          : account.accountStatus}
+                      </span>
+                    </td>
+                    <td className="text-right pr-3">
+                      {account.canScheduleDeletion && (
+                        <button
+                          onClick={() => scheduleInactiveDeletion(account)}
+                          className="text-xs text-red-600 hover:underline whitespace-nowrap"
+                        >
+                          Issue deletion request
+                        </button>
+                      )}
+                      {account.pending_deletion_at && (
+                        <span className="text-xs text-gray-500">Already scheduled</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+                {accountActivity.length === 0 && (
+                  <tr><td colSpan={6} className="p-4 text-center text-gray-500">No accounts found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

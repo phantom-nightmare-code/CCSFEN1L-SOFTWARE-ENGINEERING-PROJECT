@@ -9,5 +9,6 @@ const schema = new mongoose.Schema({
 }, { timestamps: true });
 
 schema.index({ createdAt: -1 });
+schema.index({ action: 1, userId: 1, createdAt: -1 });
 
 module.exports = mongoose.model('ActivityLog', schema);
