@@ -6,6 +6,7 @@ const PaymentLog = require('../models/mongo/PaymentLog');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logActivity } = require('../services/activityLogger');
 const { isPaymentMethod, MEMBERSHIP_PRICES } = require('../services/paymentPolicy');
+const { buildClientUrl } = require('../services/clientUrl');
 const {
   parseEmails,
   sendPaymentVerificationEmail,
@@ -15,7 +16,7 @@ const router = express.Router();
 
 /* ---------- helper: build QR + send verification email ---------- */
 async function emailVerificationFor(payment, additionalTo = []) {
-  const verifyUrl = `${process.env.CLIENT_URL}/verify-payment/${payment.reference}`;
+  const verifyUrl = buildClientUrl(`/verify-payment/${payment.reference}`);
   const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
     width: 300,
     margin: 2,

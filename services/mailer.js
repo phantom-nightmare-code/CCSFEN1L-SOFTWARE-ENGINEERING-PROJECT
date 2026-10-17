@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { buildClientUrl } = require('./clientUrl');
 
 // Brevo is replaced by the Google Apps Script API
 const APPS_SCRIPT_URL = process.env.APPS_SCRIPT_URL;
@@ -92,7 +93,7 @@ async function sendPaymentVerificationEmail({
   to, additionalTo = [], qrDataUrl, reference,
   amount, method, purpose, itemName,
 }) {
-  const verifyUrl = `${process.env.CLIENT_URL}/verify-payment/${reference}`;
+  const verifyUrl = buildClientUrl(`/verify-payment/${reference}`);
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 520px; margin: auto; border: 1px solid #e0e0e0; border-radius: 10px; padding: 24px; background:#ffffff;">
       <h2 style="text-align: center; color: #2563eb; margin-top: 0;">FitForge Payment Verification</h2>

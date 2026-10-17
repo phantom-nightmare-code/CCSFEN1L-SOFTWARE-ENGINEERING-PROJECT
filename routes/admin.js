@@ -6,6 +6,7 @@ const AdminMetric = require('../models/mongo/AdminMetric');
 const PaymentLog = require('../models/mongo/PaymentLog');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { logAdminAction } = require('../services/auditLogger');
+const { buildClientUrl } = require('../services/clientUrl');
 
 const router = express.Router();
 router.use(authenticate, requireAdmin);
@@ -137,7 +138,7 @@ router.delete('/users/:id', async (req, res, next) => {
     // Email the user (fire-and-forget)
     try {
       const { sendAccountDeletionNoticeEmail } = require('../services/mailer');
-      const revokeUrl = `${process.env.CLIENT_URL}/revoke-deletion/${token}`;
+      const revokeUrl = buildClientUrl(`/revoke-deletion/${token}`);
       await sendAccountDeletionNoticeEmail({
         to: user.email,
         fullName: user.full_name || user.username,
@@ -993,7 +994,7 @@ router.post('/payments/:id/resend-email', async (req, res, next) => {
     if (payment.status !== 'pending')
       return res.status(400).json({ error: 'Only pending payments can be resent' });
 
-    const verifyUrl = `${process.env.CLIENT_URL}/verify-payment/${payment.reference}`;
+    const verifyUrl = buildClientUrl(`/verify-payment/${payment.reference}`);
     const qrDataUrl = await QRCode.toDataURL(verifyUrl, {
       width: 300, margin: 2,
       color: { dark: '#000000', light: '#ffffff' },

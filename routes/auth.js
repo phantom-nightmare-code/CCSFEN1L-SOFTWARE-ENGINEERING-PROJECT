@@ -5,6 +5,7 @@ const crypto = require('crypto');
 const pool = require('../db/mysql');
 const { logActivity } = require('../services/activityLogger');
 const { sendWelcomeVerificationEmail } = require('../services/mailer');
+const { buildClientUrl } = require('../services/clientUrl');
 const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
@@ -143,7 +144,7 @@ router.post('/register', async (req, res, next) => {
       metadata: { email, verified: false },
     });
 
-    const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
+    const verifyUrl = buildClientUrl(`/verify-email/${verificationToken}`);
     sendWelcomeVerificationEmail({
       to: email,
       fullName: full_name,
@@ -233,7 +234,7 @@ router.post('/resend-verification', async (req, res, next) => {
       [verificationToken, expiresAt, user.id]
     );
 
-    const verifyUrl = `${process.env.CLIENT_URL}/verify-email/${verificationToken}`;
+    const verifyUrl = buildClientUrl(`/verify-email/${verificationToken}`);
     sendWelcomeVerificationEmail({
       to: user.email,
       fullName: user.full_name,
