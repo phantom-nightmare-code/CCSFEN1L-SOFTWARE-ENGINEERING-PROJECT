@@ -106,8 +106,9 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 - Non-blocking email sending — API responds instantly
 
 ### 🎵 Music
-- A music-note toggle in the navigation plays or pauses the user-provided `I love You` MP3
-- Playback starts only after the user turns it on; the track is included as a Cloudflare Pages static asset
+- A music-note toggle in the navigation plays or pauses the selected licensed MP3
+- Use the adjacent track menu to switch among the five included tracks; playback starts only after the user turns it on
+- Music files are Cloudflare Pages static assets and each stays below the 25 MiB per-file limit
 
 ### 🏋️ Equipment Rentals
 - 8 seeded rental items with hourly pricing
