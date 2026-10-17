@@ -40,9 +40,12 @@ export default function Profile() {
 
   // --- FETCH DATA FROM BACKEND ---
   const fetchData = async () => {
+    // ✅ CRITICAL FIX: Do not fire API calls if the token is missing
+    if (!token) return;
+
     setLoading(true);
     try {
-      // 1. Fetch profile info (cache: 'no-store' prevents stale data)
+      // 1. Fetch profile info
       const profileRes = await fetch(`${API_URL}/users/${user.id}`, {
         headers: { 'Authorization': `Bearer ${token}` },
         cache: 'no-store' 
@@ -58,9 +61,11 @@ export default function Profile() {
         if (setUser && data.full_name) {
           setUser(prev => ({ ...prev, full_name: data.full_name }));
         }
+      } else if (profileRes.status === 401) {
+        console.warn("Session expired. Please log in again.");
       }
 
-      // 2. Fetch transactions and total spent (cache: 'no-store')
+      // 2. Fetch transactions and total spent
       const paymentRes = await fetch(`${API_URL}/payments/me`, {
         headers: { 'Authorization': `Bearer ${token}` },
         cache: 'no-store'
@@ -70,6 +75,8 @@ export default function Profile() {
         const paymentData = await paymentRes.json();
         setTransactions(paymentData.transactions || []);
         setTotalSpent(paymentData.totalSpent || 0);
+      } else if (paymentRes.status === 401) {
+        console.warn("Session expired. Please log in again.");
       } else {
         console.error("Failed to fetch payments. Status:", paymentRes.status);
       }
@@ -84,11 +91,16 @@ export default function Profile() {
       navigate('/login');
       return;
     }
-    fetchData();
+    
+    // ✅ CRITICAL FIX: Only run fetchData when the token exists
+    if (token) {
+      fetchData();
+    }
   }, [user, navigate, token]);
 
   // --- SAVE PROFILE CHANGES ---
   const handleSaveProfile = async () => {
+    if (!token) return;
     setSaveLoading(true);
     try {
       const response = await fetch(`${API_URL}/users/${user.id}/coach-details`, {
@@ -119,7 +131,11 @@ export default function Profile() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-gray-400">Loading profile...</div>;
+  // Show a loading state if the user is logged in but the token is still loading
+  if (loading || (user && !token)) {
+    return <div className="p-8 text-center text-gray-400">Loading profile data...</div>;
+  }
+  
   if (!user) return null;
 
   const tabs = isCoach ? ['overview'] : ['overview', 'transactions', 'memberships', 'rentals'];
@@ -371,7 +387,7 @@ export default function Profile() {
                       <td className="px-4 py-3 text-right">₱{t.amount.toFixed(2)}</td>
                       <td className="px-4 py-3 text-center">
                         <span className={`px-2 py-0.5 rounded text-xs font-bold ${
-                          t.status === 'paid' ? 'bg-green-900/50 text-green-400' : 
+                          t.status === 'paid' || t.status === 'active' ? 'bg-green-900/50 text-green-400' : 
                           t.status === 'pending' ? 'bg-yellow-900/50 text-yellow-400' : 
                           'bg-red-900/50 text-red-400'
                         }`}>
