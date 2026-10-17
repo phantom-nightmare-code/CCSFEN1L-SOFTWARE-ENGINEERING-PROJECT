@@ -54,7 +54,7 @@ export default function FeedbackThread({ feedback, onUpdate, canClose, endpointP
   };
 
   const closeThread = async () => {
-    if (!confirm('Close this feedback? Replies and reactions will be locked.')) return;
+    if (!confirm('Close this feedback? You will not be able to reply or react afterward, but the client can still comment.')) return;
     try {
       await api.patch(`${endpointPrefix}/feedback/${feedback.id}/close`);
       showToast('Feedback closed');
@@ -158,14 +158,14 @@ export default function FeedbackThread({ feedback, onUpdate, canClose, endpointP
         </div>
       )}
 
-      {!closed && (
+      {(!closed || !isCoach) && (
         <div className="flex gap-2 mt-3">
           <input
             type="text"
             value={reply}
             onChange={e => setReply(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
-            placeholder={isCoach ? 'Reply as coach…' : 'Reply…'}
+            placeholder={isCoach ? 'Reply as coach…' : 'Comment on your coach’s feedback…'}
             className="flex-1 border rounded px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
           />
           <button

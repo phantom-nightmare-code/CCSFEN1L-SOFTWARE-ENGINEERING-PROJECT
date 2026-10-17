@@ -364,7 +364,7 @@ The client defaults to the published FitForge Render API in production; if you d
 
 3. Create a database named fitforge
 
-4. Import the SQL schema from db/migrations/
+4. Import the SQL migration files in `db/migrations/` in numeric order. For an existing database, run any migrations it has not applied yet, including `006_coach_feedback_threads.sql` to enable coach feedback replies and close states.
 
 ### 5. Run the App
 # Terminal 1 — Backend
@@ -375,4 +375,3 @@ cd client
 npm run dev
 
 Open http://localhost:5173 in your browser.
-

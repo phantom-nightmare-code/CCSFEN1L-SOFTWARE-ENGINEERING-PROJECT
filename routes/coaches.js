@@ -351,10 +351,12 @@ router.post('/feedback/:id/replies', async (req, res, next) => {
       return res.status(400).json({ error: 'Content required' });
 
     const [[fb]] = await pool.query(
-      'SELECT id FROM coach_feedback WHERE id = ? AND coach_id = ?',
+      'SELECT id, closed_at FROM coach_feedback WHERE id = ? AND coach_id = ?',
       [req.params.id, req.user.id]
     );
     if (!fb) return res.status(403).json({ error: 'Not your feedback' });
+    if (fb.closed_at)
+      return res.status(400).json({ error: 'Closed feedback cannot receive coach replies' });
 
     const [r] = await pool.query(
       `INSERT INTO coach_feedback_replies (feedback_id, author_id, content)
