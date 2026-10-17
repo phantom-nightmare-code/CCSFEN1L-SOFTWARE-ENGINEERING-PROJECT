@@ -321,6 +321,13 @@ router.get('/me', authenticate, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+router.post('/logout', authenticate, async (req, res, next) => {
+  try {
+    await logActivity({ userId: req.user.id, action: 'logout', req });
+    res.json({ ok: true });
+  } catch (err) { next(err); }
+});
+
 /* ---------- PATCH /api/auth/me ---------- */
 router.patch('/me', authenticate, async (req, res, next) => {
   try {

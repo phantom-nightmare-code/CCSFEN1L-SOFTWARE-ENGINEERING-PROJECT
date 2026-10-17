@@ -4,6 +4,7 @@ const {
   ONLINE_WINDOW_MS,
   DELETION_INACTIVITY_MS,
   presenceStatus,
+  offlineDurationLabel,
   canScheduleInactiveAccountDeletion,
 } = require('../services/accountActivity');
 
@@ -25,6 +26,22 @@ test('classifies online presence within the heartbeat window', () => {
     presenceStatus('invalid-date', now),
     { status: 'unknown', offlineDays: null, offlineDurationMs: null }
   );
+});
+
+test('formats offline duration as less than a day until 24 full hours pass', () => {
+  assert.equal(offlineDurationLabel({
+    status: 'offline',
+    offlineDurationMs: 86_399_999,
+  }), 'Less than 1 day');
+  assert.equal(offlineDurationLabel({
+    status: 'offline',
+    offlineDurationMs: 86_400_000,
+  }), '1 day');
+  assert.equal(offlineDurationLabel({
+    status: 'offline',
+    offlineDurationMs: 2 * 86_400_000,
+  }), '2 days');
+  assert.equal(offlineDurationLabel({ status: 'online', offlineDurationMs: 0 }), '—');
 });
 
 test('only permits deletion requests for non-admin accounts offline for more than seven days', () => {

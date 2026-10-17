@@ -117,6 +117,14 @@ export default function Admin() {
   }, [accountActivity]);
 
   const displayName = (u) => u.full_name || u.username || u.email || `User #${u.id}`;
+  const relativeLastSeen = (lastSeenAt, presenceStatus) => {
+    if (!lastSeenAt) return 'No presence data yet';
+    if (presenceStatus === 'online') return 'Online now';
+    const elapsedMs = Math.max(0, Date.now() - new Date(lastSeenAt).getTime());
+    if (elapsedMs < 86_400_000) return 'Less than 1 day ago';
+    const fullDays = Math.floor(elapsedMs / 86_400_000);
+    return `${fullDays} day${fullDays === 1 ? '' : 's'} ago`;
+  };
 
   const setRole = async (id, role) => {
     try {
@@ -530,9 +538,10 @@ export default function Admin() {
                 <tr className="text-left border-b border-gray-100 dark:border-gray-800">
                   <th className="p-3">Account</th>
                   <th>Role</th>
-                  <th>Last seen online</th>
+                  <th>Recent</th>
                   <th>Offline for</th>
                   <th>Status</th>
+                  <th>Recent action</th>
                   <th className="pr-3">Action</th>
                 </tr>
               </thead>
@@ -544,18 +553,12 @@ export default function Admin() {
                       <div className="text-xs text-gray-500">{account.email}</div>
                     </td>
                     <td className="capitalize">{account.role}</td>
-                    <td className="text-gray-500">
-                      {account.lastSeenAt
-                        ? new Date(account.lastSeenAt).toLocaleString()
-                        : 'No presence data yet'}
+                    <td className="text-gray-500" title={account.lastSeenAt
+                      ? new Date(account.lastSeenAt).toLocaleString()
+                      : undefined}>
+                      {relativeLastSeen(account.lastSeenAt, account.presenceStatus)}
                     </td>
-                    <td>
-                      {account.offlineDays == null
-                        ? '—'
-                        : account.offlineDays === 0
-                          ? 'Less than 1 day'
-                          : `${account.offlineDays} day(s)`}
-                    </td>
+                    <td>{account.offlineDurationLabel}</td>
                     <td>
                       <span className={`px-2 py-0.5 rounded text-xs ${
                         account.pending_deletion_at
@@ -570,6 +573,15 @@ export default function Admin() {
                           ? 'deletion scheduled'
                           : account.presenceStatus}
                       </span>
+                    </td>
+                    <td className="text-gray-500">
+                      {account.recentAuthAction
+                        ? (
+                          <span title={new Date(account.recentAuthActionAt).toLocaleString()}>
+                            {account.recentAuthAction === 'login' ? 'Logged in' : 'Logged out'}
+                          </span>
+                        )
+                        : 'No login/logout recorded'}
                     </td>
                     <td className="text-right pr-3">
                       {account.canScheduleDeletion && (
@@ -587,7 +599,7 @@ export default function Admin() {
                   </tr>
                 ))}
                 {accountActivity.length === 0 && (
-                  <tr><td colSpan={6} className="p-4 text-center text-gray-500">No accounts found.</td></tr>
+                  <tr><td colSpan={7} className="p-4 text-center text-gray-500">No accounts found.</td></tr>
                 )}
               </tbody>
             </table>

@@ -23,6 +23,14 @@ function presenceStatus(lastSeenAt, now = new Date()) {
   };
 }
 
+function offlineDurationLabel({ status, offlineDurationMs }) {
+  if (status !== 'offline' || offlineDurationMs == null) return '—';
+  if (offlineDurationMs < 86_400_000) return 'Less than 1 day';
+
+  const fullDays = Math.floor(offlineDurationMs / 86_400_000);
+  return `${fullDays} day${fullDays === 1 ? '' : 's'}`;
+}
+
 function canScheduleInactiveAccountDeletion({
   role,
   userId,
@@ -43,5 +51,6 @@ module.exports = {
   ONLINE_WINDOW_MS,
   DELETION_INACTIVITY_MS,
   presenceStatus,
+  offlineDurationLabel,
   canScheduleInactiveAccountDeletion,
 };

@@ -76,6 +76,9 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
+    api.post('/auth/logout').catch(error => {
+      console.error('Logout activity could not be recorded:', error.message);
+    });
     localStorage.removeItem('token');
     setUser(null);
   };

@@ -127,7 +127,7 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 | **PROFILE** | Admin card + grid of all users |
 | **STATS** | User counts, login chart, revenue analytics |
 | **USERS** | Full user table with **role dropdown** and **Remove** button |
-| **ACCOUNT ACTIVITY** | Live online/offline presence, offline days, and deletion-request action for accounts offline over 7 days |
+| **ACCOUNT ACTIVITY** | Recent presence, offline duration, latest login/logout, and deletion-request action for accounts offline over 7 days |
 | **DELETIONS** | Scheduled account deletions and revocation deadlines |
 | **ACTIVITY** | MongoDB activity feed |
 | **AUDIT LOG** | Every admin action recorded with reason |
@@ -150,6 +150,8 @@ Whether you're a first-timer or a seasoned lifter, FitForge gives you the tools 
 - Review online/offline presence in **ACCOUNT ACTIVITY**; accounts offline for more than 7 days can be scheduled for deletion
 - Scheduled deletion emails give users 7 days to revoke the request; accounts are not deleted automatically based on inactivity
 - Online status uses authenticated browser heartbeats while the app tab is visible; status changes to offline after 2 minutes without a heartbeat
+- The recent-presence list is sorted newest first; offline times under 24 hours display as “Less than 1 day”
+- Latest account action shows only “Logged in” or “Logged out”
 - Existing accounts show unknown presence until their browser reports its first heartbeat; earlier login history is not treated as proof of current presence
 - Safety rules:
   - Cannot remove yourself

@@ -10,6 +10,7 @@ const { logAdminAction } = require('../services/auditLogger');
 const { buildClientUrl } = require('../services/clientUrl');
 const {
   presenceStatus,
+  offlineDurationLabel,
   canScheduleInactiveAccountDeletion,
 } = require('../services/accountActivity');
 
@@ -96,20 +97,41 @@ router.get('/users/activity-status', async (req, res, next) => {
       userId: 1,
       lastSeenAt: 1,
     }).lean();
+    const authEvents = await ActivityLog.aggregate([
+      { $match: { action: { $in: ['login', 'logout'] }, userId: { $ne: null } } },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$userId',
+          action: { $first: '$action' },
+          createdAt: { $first: '$createdAt' },
+        },
+      },
+    ]);
     const presenceByUser = new Map(
       presenceRecords.map(record => [Number(record.userId), record.lastSeenAt])
     );
+    const authEventByUser = new Map(
+      authEvents.map(event => [Number(event._id), {
+        action: event.action,
+        createdAt: event.createdAt,
+      }])
+    );
     const now = new Date();
 
-    res.json(users.map(user => {
+    const accountStatuses = users.map(user => {
       const lastSeenAt = presenceByUser.get(Number(user.id)) || null;
       const presence = presenceStatus(lastSeenAt, now);
+      const recentAuthEvent = authEventByUser.get(Number(user.id)) || null;
       return {
         ...user,
         lastSeenAt,
         presenceStatus: presence.status,
         offlineDays: presence.offlineDays,
         offlineDurationMs: presence.offlineDurationMs,
+        offlineDurationLabel: offlineDurationLabel(presence),
+        recentAuthAction: recentAuthEvent?.action || null,
+        recentAuthActionAt: recentAuthEvent?.createdAt || null,
         canScheduleDeletion: canScheduleInactiveAccountDeletion({
           role: user.role,
           userId: user.id,
@@ -119,7 +141,13 @@ router.get('/users/activity-status', async (req, res, next) => {
           offlineDurationMs: presence.offlineDurationMs,
         }),
       };
-    }));
+    });
+    accountStatuses.sort((a, b) => {
+      const aSeen = a.lastSeenAt ? new Date(a.lastSeenAt).getTime() : 0;
+      const bSeen = b.lastSeenAt ? new Date(b.lastSeenAt).getTime() : 0;
+      return bSeen - aSeen;
+    });
+    res.json(accountStatuses);
   } catch (err) { next(err); }
 });
 
