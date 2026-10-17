@@ -21,9 +21,17 @@ export default function Profile() {
   
   const [transactions, setTransactions] = useState([]);
   const [totalSpent, setTotalSpent] = useState(0);
+  const [memberships, setMemberships] = useState([]);
 
   const isCoach = user?.role === 'coach';
   const refundedCount = transactions.filter(transaction => transaction.status === 'refunded').length;
+  const today = new Date().toISOString().slice(0, 10);
+  const activeMembership = memberships.find(membership =>
+    membership.status === 'active' &&
+    (!membership.end_date || String(membership.end_date).slice(0, 10) >= today)
+  );
+  const pendingMembership = memberships.find(membership => membership.status === 'pending');
+  const displayedMembership = activeMembership || pendingMembership || memberships[0];
 
   // --- BULLETPROOF DATE FORMATTING ---
   const formatDate = (dateString) => {
@@ -85,6 +93,16 @@ export default function Profile() {
         setTotalSpent(paymentData.totalSpent || 0);
       } else {
         console.error("Failed to fetch payments. Status:", paymentRes.status);
+      }
+
+      const membershipRes = await fetch(`${API_BASE_URL}/memberships/me`, {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+        cache: 'no-store'
+      });
+      if (membershipRes.ok) {
+        setMemberships(await membershipRes.json());
+      } else {
+        console.error("Failed to fetch memberships. Status:", membershipRes.status);
       }
     } catch (error) {
       console.error("Error fetching profile data:", error);
@@ -339,7 +357,35 @@ export default function Profile() {
                 <>
                   <div className="flex justify-between items-center border-b border-gray-800 pb-2">
                     <span className="text-gray-500">Membership</span>
-                    <span className="text-gray-300">No active membership</span>
+                    {displayedMembership ? (
+                      <div className="text-right">
+                        <div className="text-white font-medium capitalize">
+                          {displayedMembership.type} plan
+                        </div>
+                        <div className={`text-xs capitalize ${
+                          displayedMembership.status === 'active'
+                            ? 'text-green-400'
+                            : displayedMembership.status === 'pending'
+                              ? 'text-yellow-400'
+                              : 'text-gray-400'
+                        }`}>
+                          {displayedMembership.status}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {displayedMembership.start_date?.slice(0, 10)} – {displayedMembership.end_date?.slice(0, 10)}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-right">
+                        <span className="text-gray-300">No active membership</span>
+                        <button
+                          onClick={() => navigate('/membership')}
+                          className="block ml-auto text-xs text-blue-400 hover:text-blue-300"
+                        >
+                          Choose a plan
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div className="flex justify-between items-center border-b border-gray-800 pb-2">
                     <span className="text-gray-500">Active Rentals</span>
@@ -413,8 +459,38 @@ export default function Profile() {
 
       {/* Other tabs for non-coaches */}
       {activeTab === 'memberships' && !isCoach && (
-        <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-6 text-center text-gray-500">
-          No membership history.
+        <div className="bg-[#1e1e24] border border-gray-800 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-white mb-4">Membership History</h3>
+          {memberships.length === 0 ? (
+            <div className="text-center text-gray-500">
+              <p className="mb-3">No memberships yet.</p>
+              <button
+                onClick={() => navigate('/membership')}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded"
+              >
+                View membership plans
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {memberships.map(membership => (
+                <div key={membership.id} className="flex justify-between items-center gap-4 border-b border-gray-800 pb-3">
+                  <div>
+                    <p className="text-white font-medium capitalize">{membership.type} plan</p>
+                    <p className="text-xs text-gray-500">
+                      {membership.start_date?.slice(0, 10)} – {membership.end_date?.slice(0, 10)}
+                    </p>
+                  </div>
+                  <span className={`text-xs font-semibold uppercase ${
+                    membership.status === 'active' ? 'text-green-400'
+                      : membership.status === 'pending' ? 'text-yellow-400' : 'text-gray-400'
+                  }`}>
+                    {membership.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {activeTab === 'rentals' && !isCoach && (

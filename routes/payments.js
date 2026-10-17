@@ -238,19 +238,7 @@ router.get('/me', authenticate, async (req, res, next) => {
       console.error("⚠️ Coach payments table missing or error:", sqlError.message);
     }
 
-    // 3. Get Memberships from MySQL (Fallback if PaymentLog is missing)
-    let userMemberships = [];
-    try {
-      const [rows] = await pool.query(
-        `SELECT * FROM memberships WHERE user_id = ?`,
-        [req.user.id]
-      );
-      userMemberships = rows;
-    } catch (sqlError) {
-      console.error("⚠️ Memberships table error:", sqlError.message);
-    }
-
-    // 4. Format everything into a unified list
+    // 3. Format actual payment records into a unified list.
     const formattedMongo = mongoPayments.map(p => ({
       id: p._id.toString(),
       reference: p.reference,
@@ -275,23 +263,8 @@ router.get('/me', authenticate, async (req, res, next) => {
       source: 'coach'
     }));
 
-    // Format memberships that don't have a corresponding PaymentLog
-    const formattedMemberships = userMemberships
-      .filter(m => !mongoPayments.some(p => p.purpose === 'membership' && p.referenceId === m.id)) // Avoid duplicates
-      .map(m => ({
-        id: `mem-${m.id}`,
-        reference: `MEM-${m.id.toString().padStart(5, '0')}`,
-        amount: 0, // Unknown price here, so put 0 to avoid double counting
-        method: 'walk-in', 
-        purpose: 'membership',
-        status: m.status,
-        date: m.created_at || m.start_date,
-        details: { type: m.type },
-        source: 'membership'
-      }));
-
-    // 5. Combine and sort by date (newest first)
-    const allTransactions = [...formattedMongo, ...formattedCoach, ...formattedMemberships].sort(
+    // Membership state is exposed separately by /api/memberships/me; it is not a payment record.
+    const allTransactions = [...formattedMongo, ...formattedCoach].sort(
       (a, b) => new Date(b.date) - new Date(a.date)
     );
 
